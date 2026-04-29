@@ -21,8 +21,7 @@
             --border: #eaecef;
             --shadow: 0 4px 20px rgba(0,0,0,0.06);
             --radius: 12px;
-            --app-height: 100vh;
-            --keyboard-offset: 0px;
+            --mobile-keyboard-offset: 0px;
         }
 
         * { box-sizing: border-box; }
@@ -33,7 +32,7 @@
             color: var(--text);
             margin: 0;
             padding: 20px;
-            height: var(--app-height);
+            height: 100vh;
             display: flex;
             flex-direction: column;
         }
@@ -295,50 +294,37 @@
 
         @media (max-width: 768px) {
             body {
-                padding: 10px;
-                overflow: hidden;
+                padding: 0;
+                height: 100dvh;
             }
             .app-header {
-                margin-bottom: 10px;
-                flex-shrink: 0;
+                margin-bottom: 0;
+                padding: 12px 14px;
+                background: var(--panel);
+                border-bottom: 1px solid var(--border);
             }
             .trainer-wrapper {
-                height: 100%;
-                min-height: 0;
+                max-width: 100%;
+                border-radius: 0;
+                box-shadow: none;
+                margin: 0;
             }
             .panels {
                 grid-template-columns: 1fr;
-                flex: 1;
-                min-height: 0;
-                overflow: hidden;
+                padding-bottom: 170px;
             }
-            .panel {
-                padding: 12px;
-                min-height: 0;
-            }
-            .ru-panel {
-                flex: 0 0 auto;
-                max-height: 36vh;
-                border-bottom: 1px solid var(--border);
-            }
-            .en-panel {
-                flex: 1;
-                min-height: 0;
-            }
+            .panel { max-height: none; }
             .input-zone {
-                position: sticky;
-                bottom: var(--keyboard-offset);
-                z-index: 20;
-                padding: 12px;
+                position: fixed;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 40;
+                background: var(--panel);
                 border-top: 1px solid var(--border);
-            }
-            input[type="text"] {
-                margin-bottom: 10px;
-                padding: 12px;
-                font-size: 1rem;
-            }
-            .controls {
-                gap: 8px;
+                padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+                transform: translateY(calc(-1 * var(--mobile-keyboard-offset)));
+                transition: transform 0.2s ease;
             }
             .modal-content { width: 95%; }
             .dual-input { grid-template-columns: 1fr; }
@@ -697,30 +683,24 @@
     const gotItBtn = document.getElementById('gotItBtn');
     const restartBtn = document.getElementById('restartBtn');
     const feedback = document.getElementById('feedback');
-    const mobileQuery = window.matchMedia('(max-width: 768px)');
-
-    function syncViewportHeight() {
-        const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-        document.documentElement.style.setProperty('--app-height', `${Math.round(viewportHeight)}px`);
-    }
-
-    function syncKeyboardOffset() {
-        if (!mobileQuery.matches || !window.visualViewport) {
-            document.documentElement.style.setProperty('--keyboard-offset', '0px');
-            return;
-        }
-        const keyboardOffset = Math.max(0, window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop);
-        document.documentElement.style.setProperty('--keyboard-offset', `${Math.round(keyboardOffset)}px`);
-    }
-
-    function keepActiveSentenceVisible() {
-        if (!mobileQuery.matches) return;
-        const active = document.querySelector('.ru-sentence.active');
-        if (active) active.scrollIntoView({ behavior: 'auto', block: 'nearest' });
-    }
+    const isMobile = window.matchMedia('(max-width: 768px)');
 
     function normalize(str) {
         return str.trim().toLowerCase().replace(/[^\w\s']/g, '').replace(/\s+/g, ' ');
+    }
+
+    function syncMobileKeyboardOffset() {
+        if (!isMobile.matches) {
+            document.documentElement.style.setProperty('--mobile-keyboard-offset', '0px');
+            return;
+        }
+        const viewport = window.visualViewport;
+        if (!viewport) {
+            document.documentElement.style.setProperty('--mobile-keyboard-offset', '0px');
+            return;
+        }
+        const keyboardOffset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+        document.documentElement.style.setProperty('--mobile-keyboard-offset', `${keyboardOffset}px`);
     }
 
     function initTrainer() {
@@ -786,11 +766,7 @@
             el.classList.toggle('active', parseInt(el.dataset.index) === currentIndex);
         });
         const active = document.querySelector('.ru-sentence.active');
-        if (active) {
-            const behavior = mobileQuery.matches ? 'auto' : 'smooth';
-            const block = mobileQuery.matches ? 'nearest' : 'center';
-            active.scrollIntoView({ behavior, block });
-        }
+        if (active) active.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     function saveProgress() {
@@ -864,36 +840,20 @@
     userInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') checkAnswer();
     });
-    userInput.addEventListener('focus', () => {
-        syncViewportHeight();
-        syncKeyboardOffset();
-        setTimeout(keepActiveSentenceVisible, 60);
-    });
-    userInput.addEventListener('blur', () => {
-        setTimeout(() => {
-            syncViewportHeight();
-            syncKeyboardOffset();
-        }, 100);
-    });
-
     if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', () => {
-            syncViewportHeight();
-            syncKeyboardOffset();
-            keepActiveSentenceVisible();
-        });
-        window.visualViewport.addEventListener('scroll', syncKeyboardOffset);
+        window.visualViewport.addEventListener('resize', syncMobileKeyboardOffset);
+        window.visualViewport.addEventListener('scroll', syncMobileKeyboardOffset);
     }
-    window.addEventListener('resize', () => {
-        syncViewportHeight();
-        syncKeyboardOffset();
+    window.addEventListener('resize', syncMobileKeyboardOffset);
+    userInput.addEventListener('focus', syncMobileKeyboardOffset);
+    userInput.addEventListener('blur', () => {
+        setTimeout(syncMobileKeyboardOffset, 120);
     });
 
     // Init
-    syncViewportHeight();
-    syncKeyboardOffset();
     initStorage();
     initTrainer();
+    syncMobileKeyboardOffset();
 </script>
 
 </body>
