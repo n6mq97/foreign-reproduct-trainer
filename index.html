@@ -21,6 +21,8 @@
             --border: #eaecef;
             --shadow: 0 4px 20px rgba(0,0,0,0.06);
             --radius: 12px;
+            --app-height: 100vh;
+            --keyboard-offset: 0px;
         }
 
         * { box-sizing: border-box; }
@@ -31,7 +33,7 @@
             color: var(--text);
             margin: 0;
             padding: 20px;
-            height: 100vh;
+            height: var(--app-height);
             display: flex;
             flex-direction: column;
         }
@@ -292,8 +294,52 @@
         .toast.show { opacity: 1; transform: translateY(0); }
 
         @media (max-width: 768px) {
-            .panels { grid-template-columns: 1fr; }
-            .panel { max-height: 35vh; }
+            body {
+                padding: 10px;
+                overflow: hidden;
+            }
+            .app-header {
+                margin-bottom: 10px;
+                flex-shrink: 0;
+            }
+            .trainer-wrapper {
+                height: 100%;
+                min-height: 0;
+            }
+            .panels {
+                grid-template-columns: 1fr;
+                flex: 1;
+                min-height: 0;
+                overflow: hidden;
+            }
+            .panel {
+                padding: 12px;
+                min-height: 0;
+            }
+            .ru-panel {
+                flex: 0 0 auto;
+                max-height: 36vh;
+                border-bottom: 1px solid var(--border);
+            }
+            .en-panel {
+                flex: 1;
+                min-height: 0;
+            }
+            .input-zone {
+                position: sticky;
+                bottom: var(--keyboard-offset);
+                z-index: 20;
+                padding: 12px;
+                border-top: 1px solid var(--border);
+            }
+            input[type="text"] {
+                margin-bottom: 10px;
+                padding: 12px;
+                font-size: 1rem;
+            }
+            .controls {
+                gap: 8px;
+            }
             .modal-content { width: 95%; }
             .dual-input { grid-template-columns: 1fr; }
         }
@@ -651,6 +697,27 @@
     const gotItBtn = document.getElementById('gotItBtn');
     const restartBtn = document.getElementById('restartBtn');
     const feedback = document.getElementById('feedback');
+    const mobileQuery = window.matchMedia('(max-width: 768px)');
+
+    function syncViewportHeight() {
+        const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        document.documentElement.style.setProperty('--app-height', `${Math.round(viewportHeight)}px`);
+    }
+
+    function syncKeyboardOffset() {
+        if (!mobileQuery.matches || !window.visualViewport) {
+            document.documentElement.style.setProperty('--keyboard-offset', '0px');
+            return;
+        }
+        const keyboardOffset = Math.max(0, window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop);
+        document.documentElement.style.setProperty('--keyboard-offset', `${Math.round(keyboardOffset)}px`);
+    }
+
+    function keepActiveSentenceVisible() {
+        if (!mobileQuery.matches) return;
+        const active = document.querySelector('.ru-sentence.active');
+        if (active) active.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+    }
 
     function normalize(str) {
         return str.trim().toLowerCase().replace(/[^\w\s']/g, '').replace(/\s+/g, ' ');
@@ -719,7 +786,11 @@
             el.classList.toggle('active', parseInt(el.dataset.index) === currentIndex);
         });
         const active = document.querySelector('.ru-sentence.active');
-        if (active) active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (active) {
+            const behavior = mobileQuery.matches ? 'auto' : 'smooth';
+            const block = mobileQuery.matches ? 'nearest' : 'center';
+            active.scrollIntoView({ behavior, block });
+        }
     }
 
     function saveProgress() {
@@ -793,8 +864,34 @@
     userInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') checkAnswer();
     });
+    userInput.addEventListener('focus', () => {
+        syncViewportHeight();
+        syncKeyboardOffset();
+        setTimeout(keepActiveSentenceVisible, 60);
+    });
+    userInput.addEventListener('blur', () => {
+        setTimeout(() => {
+            syncViewportHeight();
+            syncKeyboardOffset();
+        }, 100);
+    });
+
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => {
+            syncViewportHeight();
+            syncKeyboardOffset();
+            keepActiveSentenceVisible();
+        });
+        window.visualViewport.addEventListener('scroll', syncKeyboardOffset);
+    }
+    window.addEventListener('resize', () => {
+        syncViewportHeight();
+        syncKeyboardOffset();
+    });
 
     // Init
+    syncViewportHeight();
+    syncKeyboardOffset();
     initStorage();
     initTrainer();
 </script>
