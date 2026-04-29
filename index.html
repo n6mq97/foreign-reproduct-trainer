@@ -113,6 +113,7 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
+            min-height: 0;
         }
 
         .ru-sentence {
@@ -151,7 +152,7 @@
             background: #fafbfc;
         }
 
-        input[type="text"] {
+        #userInput {
             width: 100%;
             padding: 14px;
             font-size: 1.05rem;
@@ -159,9 +160,15 @@
             border-radius: 8px;
             transition: border-color 0.2s;
             margin-bottom: 12px;
+            min-height: 52px;
+            max-height: 180px;
+            resize: none;
+            overflow-y: auto;
+            line-height: 1.4;
+            font-family: inherit;
         }
-        input[type="text"]:focus { outline: none; border-color: var(--accent); }
-        input:disabled { background: #f1f3f5; color: #a0a5aa; cursor: not-allowed; }
+        #userInput:focus { outline: none; border-color: var(--accent); }
+        input:disabled, textarea:disabled { background: #f1f3f5; color: #a0a5aa; cursor: not-allowed; }
 
         .controls {
             display: flex;
@@ -182,6 +189,10 @@
         .feedback.error { background: var(--error-bg); color: var(--error-text); }
         .feedback.success { background: var(--success-bg); color: #155724; }
         .hint { font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; text-align: center; }
+        #enList {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -313,7 +324,12 @@
                 grid-template-columns: 1fr;
                 padding-bottom: 170px;
             }
-            .panel { max-height: none; }
+            .panel {
+                max-height: none;
+                min-height: 0;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
             .input-zone {
                 position: fixed;
                 left: 0;
@@ -328,6 +344,9 @@
             }
             .modal-content { width: 95%; }
             .dual-input { grid-template-columns: 1fr; }
+            #userInput {
+                max-height: 140px;
+            }
         }
     </style>
 </head>
@@ -353,7 +372,7 @@
     </div>
 
     <div class="input-zone">
-        <input type="text" id="userInput" placeholder="Введите перевод выделенного предложения..." autocomplete="off">
+        <textarea id="userInput" rows="1" placeholder="Введите перевод выделенного предложения..." autocomplete="off"></textarea>
         <div class="controls">
             <button id="checkBtn" class="btn btn-primary">Проверить</button>
             <button id="gotItBtn" class="btn btn-warning hidden">Понял</button>
@@ -689,6 +708,12 @@
         return str.trim().toLowerCase().replace(/[^\w\s']/g, '').replace(/\s+/g, ' ');
     }
 
+    function resizeUserInput() {
+        userInput.style.height = 'auto';
+        const nextHeight = Math.min(userInput.scrollHeight, isMobile.matches ? 140 : 180);
+        userInput.style.height = `${Math.max(nextHeight, 52)}px`;
+    }
+
     function syncMobileKeyboardOffset() {
         if (!isMobile.matches) {
             document.documentElement.style.setProperty('--mobile-keyboard-offset', '0px');
@@ -729,6 +754,7 @@
         userInput.style.display = 'block';
         userInput.disabled = false;
         userInput.value = '';
+        resizeUserInput();
         feedback.className = 'feedback hidden';
         checkBtn.classList.remove('hidden');
         gotItBtn.classList.add('hidden');
@@ -790,6 +816,7 @@
                 finishTrainer();
             } else {
                 userInput.value = '';
+                resizeUserInput();
                 updateHighlight();
             }
         } else {
@@ -814,6 +841,7 @@
         
         renderEN(); // Перерисовка справа (удаляет верхнее)
         userInput.value = '';
+        resizeUserInput();
         updateHighlight();
         userInput.focus();
     }
@@ -838,8 +866,12 @@
     checkBtn.addEventListener('click', checkAnswer);
     gotItBtn.addEventListener('click', handleGotIt);
     userInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') checkAnswer();
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            checkAnswer();
+        }
     });
+    userInput.addEventListener('input', resizeUserInput);
     if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', syncMobileKeyboardOffset);
         window.visualViewport.addEventListener('scroll', syncMobileKeyboardOffset);
@@ -854,6 +886,7 @@
     initStorage();
     initTrainer();
     syncMobileKeyboardOffset();
+    resizeUserInput();
 </script>
 
 </body>
