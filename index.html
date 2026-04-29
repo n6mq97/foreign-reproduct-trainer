@@ -797,7 +797,7 @@
                 </div>
                 <div class="text-actions">
                     <button class="btn btn-sm btn-primary load-text-btn" data-id="${t.id}">Загрузить</button>
-                    ${t.id !== 'default_001' ? `<button class="btn btn-sm btn-danger delete-text-btn" data-id="${t.id}">Удалить</button>` : ''}
+                    ${!t.id.startsWith('default_') ? `<button class="btn btn-sm btn-danger delete-text-btn" data-id="${t.id}">Удалить</button>` : ''}
                 </div>
             `;
             textListEl.appendChild(div);
