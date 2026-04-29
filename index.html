@@ -457,6 +457,7 @@
         PROGRESS: 'trainer_progress',
         ACTIVE_ID: 'trainer_active_id'
     };
+    const DEFAULT_TEXTS_FILE = './default-texts.json';
 
     function loadFromStorage(key, fallback) {
         try {
@@ -499,25 +500,45 @@
     }
 
     // ==================== ДАННЫЕ ПО УМОЛЧАНИЮ ====================
-    const DEFAULT_TEXT = {
-        id: 'default_001',
-        name: 'Основы (RU -> EN)',
-        content: [
-            { ru: "Сегодня отличная погода для прогулки в парке.", en: "Today is excellent weather for a walk in the park." },
-            { ru: "Я обычно пью кофе утром, а чай вечером.", en: "I usually drink coffee in the morning and tea in the evening." },
-            { ru: "Эта книга лежит на столе возле окна.", en: "This book is on the table near the window." },
-            { ru: "Мы планируем поездку в горы на следующие выходные.", en: "We are planning a trip to the mountains for next weekend." },
-            { ru: "Не забудь позвонить мне, как только вернешься домой.", en: "Don't forget to call me as soon as you get home." }
-        ]
-    };
+    async function loadDefaultTexts() {
+        try {
+            const response = await fetch(DEFAULT_TEXTS_FILE, { cache: 'no-store' });
+            if (!response.ok) return [];
+            const data = await response.json();
+            if (!Array.isArray(data)) return [];
+            return data
+                .map((entry, index) => {
+                    const title = typeof entry?.title === 'string' ? entry.title.trim() : '';
+                    const sentences = Array.isArray(entry?.sentences)
+                        ? entry.sentences.filter(item => typeof item?.ru === 'string' && typeof item?.en === 'string')
+                        : [];
+                    if (!title || !sentences.length) return null;
+                    const content = sentences.map(sentence => ({ ru: sentence.ru.trim(), en: sentence.en.trim() }))
+                        .filter(sentence => sentence.ru && sentence.en);
+                    if (!content.length) return null;
+                    return {
+                        id: `default_${String(index + 1).padStart(3, '0')}`,
+                        name: title,
+                        content,
+                        hash: hashArray(content)
+                    };
+                })
+                .filter(Boolean);
+        } catch {
+            return [];
+        }
+    }
 
-    function initStorage() {
+    async function initStorage() {
         let texts = loadFromStorage(STORAGE_KEYS.TEXTS, []);
         if (!texts.length) {
-            texts.push({ ...DEFAULT_TEXT, hash: hashArray(DEFAULT_TEXT.content) });
-            saveToStorage(STORAGE_KEYS.TEXTS, texts);
+            const defaultTexts = await loadDefaultTexts();
+            if (defaultTexts.length) {
+                texts = defaultTexts;
+                saveToStorage(STORAGE_KEYS.TEXTS, texts);
+            }
         }
-        if (!loadFromStorage(STORAGE_KEYS.ACTIVE_ID, '')) {
+        if (texts.length && !loadFromStorage(STORAGE_KEYS.ACTIVE_ID, '')) {
             saveToStorage(STORAGE_KEYS.ACTIVE_ID, texts[0].id);
         }
     }
@@ -706,7 +727,7 @@
             textListEl.innerHTML = '<p style="text-align:center; color:var(--text-muted)">Нет сохранённых текстов</p>';
             return;
         }
-        texts.forEach(t => {
+        texts.forEach((t, index) => {
             const total = t.content.length;
             const current = Math.min(progress[t.id]?.currentIndex ?? 0, total);
             const percent = total > 0 ? Math.round((current / total) * 100) : 0;
@@ -714,7 +735,7 @@
             div.className = `text-item ${t.id === activeTextId ? 'active' : ''}`;
             div.innerHTML = `
                 <div class="text-info">
-                    <h3>${t.name}</h3>
+                    <h3>${index + 1}. ${t.name}</h3>
                     <p>${total} предложений • Прогресс: ${current}/${total} (${percent}%)</p>
                 </div>
                 <div class="text-actions">
@@ -966,10 +987,14 @@
     });
 
     // Init
-    initStorage();
-    initTrainer();
-    syncMobileKeyboardOffset();
-    resizeUserInput();
+    async function bootstrap() {
+        await initStorage();
+        initTrainer();
+        syncMobileKeyboardOffset();
+        resizeUserInput();
+    }
+
+    bootstrap();
 </script>
 
 </body>

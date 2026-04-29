@@ -1,0 +1,12 @@
+[
+  {
+    "title": "Основы (RU -> EN)",
+    "sentences": [
+      { "ru": "Сегодня отличная погода для прогулки в парке.", "en": "Today is excellent weather for a walk in the park." },
+      { "ru": "Я обычно пью кофе утром, а чай вечером.", "en": "I usually drink coffee in the morning and tea in the evening." },
+      { "ru": "Эта книга лежит на столе возле окна.", "en": "This book is on the table near the window." },
+      { "ru": "Мы планируем поездку в горы на следующие выходные.", "en": "We are planning a trip to the mountains for next weekend." },
+      { "ru": "Не забудь позвонить мне, как только вернешься домой.", "en": "Don't forget to call me as soon as you get home." }
+    ]
+  }
+]
