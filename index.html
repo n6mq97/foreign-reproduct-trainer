@@ -487,6 +487,34 @@
         return hash.toString(36);
     }
 
+    function normalizeTextName(name) {
+        return String(name || '').trim().toLowerCase();
+    }
+
+    function getProgressKey(text) {
+        return normalizeTextName(text?.name);
+    }
+
+    function migrateProgressToTextNames(textItems, progressMap) {
+        const nextProgress = { ...(progressMap || {}) };
+        const textById = new Map(textItems.map(text => [text.id, text]));
+        let changed = false;
+
+        Object.keys(nextProgress).forEach((key) => {
+            if (textById.has(key)) {
+                const text = textById.get(key);
+                const nameKey = getProgressKey(text);
+                if (nameKey && !nextProgress[nameKey]) {
+                    nextProgress[nameKey] = nextProgress[key];
+                }
+                delete nextProgress[key];
+                changed = true;
+            }
+        });
+
+        return { progress: nextProgress, changed };
+    }
+
     // Надёжное разбиение текста на предложения
     function splitIntoSentences(text) {
         if (!text || !text.trim()) return [];
@@ -531,15 +559,27 @@
 
     async function initStorage() {
         let texts = loadFromStorage(STORAGE_KEYS.TEXTS, []);
-        if (!texts.length) {
-            const defaultTexts = await loadDefaultTexts();
-            if (defaultTexts.length) {
-                texts = defaultTexts;
+        const defaultTexts = await loadDefaultTexts();
+        if (defaultTexts.length) {
+            const existingHashes = new Set(texts.map(t => t.hash));
+            const existingNames = new Set(texts.map(t => normalizeTextName(t.name)));
+            const mergedDefaults = defaultTexts.filter((text) => {
+                const nameKey = normalizeTextName(text.name);
+                return !existingHashes.has(text.hash) && !existingNames.has(nameKey);
+            });
+            if (mergedDefaults.length) {
+                texts = [...texts, ...mergedDefaults];
                 saveToStorage(STORAGE_KEYS.TEXTS, texts);
             }
         }
         if (texts.length && !loadFromStorage(STORAGE_KEYS.ACTIVE_ID, '')) {
             saveToStorage(STORAGE_KEYS.ACTIVE_ID, texts[0].id);
+        }
+
+        const savedProgress = loadFromStorage(STORAGE_KEYS.PROGRESS, {});
+        const migrationResult = migrateProgressToTextNames(texts, savedProgress);
+        if (migrationResult.changed) {
+            saveToStorage(STORAGE_KEYS.PROGRESS, migrationResult.progress);
         }
     }
 
@@ -596,16 +636,21 @@
 
         const content = srcSentences.map((ru, i) => ({ ru, en: trgSentences[i] }));
         const hash = hashArray(content);
+        const newName = (customName || `${srcLang || 'A'} -> ${trgLang || 'B'} (${content.length} предложений)`).trim();
+        const newNameKey = normalizeTextName(newName);
         
         if (texts.some(t => t.hash === hash)) {
             errEl.textContent = 'Такой текст уже сохранен.';
             return;
         }
+        if (texts.some(t => normalizeTextName(t.name) === newNameKey)) {
+            errEl.textContent = 'Текст с таким названием уже существует.';
+            return;
+        }
 
-        const autoName = `${srcLang || 'A'} -> ${trgLang || 'B'} (${content.length} предложений)`;
         const newText = {
             id: 'txt_' + Date.now().toString(36),
-            name: customName || autoName,
+            name: newName,
             content,
             hash
         };
@@ -658,6 +703,14 @@
                     ru: sentence.ru.trim(),
                     en: sentence.en.trim()
                 }));
+                const normalizedTitle = entry.title.trim();
+                const normalizedTitleKey = normalizeTextName(normalizedTitle);
+                if (!normalizedTitleKey) {
+                    throw new Error(`Элемент ${i + 1}: поле "title" не должно быть пустым`);
+                }
+                if (texts.some(t => normalizeTextName(t.name) === normalizedTitleKey)) {
+                    throw new Error(`Элемент ${i + 1}: текст с названием "${normalizedTitle}" уже существует`);
+                }
                 const hash = hashArray(normalizedContent);
                 if (texts.some(t => t.hash === hash)) {
                     duplicateCount++;
@@ -666,7 +719,7 @@
 
                 texts.push({
                     id: 'txt_' + Date.now().toString(36) + '_' + importedCount.toString(36),
-                    name: entry.title.trim(),
+                    name: normalizedTitle,
                     content: normalizedContent,
                     hash
                 });
@@ -721,7 +774,11 @@
     function renderTextList() {
         // Всегда берем свежие данные
         texts = loadFromStorage(STORAGE_KEYS.TEXTS, []);
-        const progress = loadFromStorage(STORAGE_KEYS.PROGRESS, {});
+        const migrationResult = migrateProgressToTextNames(texts, loadFromStorage(STORAGE_KEYS.PROGRESS, {}));
+        const progress = migrationResult.progress;
+        if (migrationResult.changed) {
+            saveToStorage(STORAGE_KEYS.PROGRESS, progress);
+        }
         textListEl.innerHTML = '';
         if (texts.length === 0) {
             textListEl.innerHTML = '<p style="text-align:center; color:var(--text-muted)">Нет сохранённых текстов</p>';
@@ -729,7 +786,7 @@
         }
         texts.forEach((t, index) => {
             const total = t.content.length;
-            const current = Math.min(progress[t.id]?.currentIndex ?? 0, total);
+            const current = Math.min(progress[getProgressKey(t)]?.currentIndex ?? 0, total);
             const percent = total > 0 ? Math.round((current / total) * 100) : 0;
             const div = document.createElement('div');
             div.className = `text-item ${t.id === activeTextId ? 'active' : ''}`;
@@ -766,10 +823,13 @@
     }
 
     function deleteText(id) {
+        const removedText = texts.find(t => t.id === id);
         texts = texts.filter(t => t.id !== id);
         saveToStorage(STORAGE_KEYS.TEXTS, texts);
         const progress = loadFromStorage(STORAGE_KEYS.PROGRESS, {});
-        delete progress[id];
+        if (removedText) {
+            delete progress[getProgressKey(removedText)];
+        }
         saveToStorage(STORAGE_KEYS.PROGRESS, progress);
         
         if (activeTextId === id) {
@@ -839,8 +899,12 @@
         }
 
         currentContent = activeText.content;
-        const savedProgress = loadFromStorage(STORAGE_KEYS.PROGRESS, {});
-        currentIndex = savedProgress[activeTextId]?.currentIndex ?? 0;
+        const migrationResult = migrateProgressToTextNames(texts, loadFromStorage(STORAGE_KEYS.PROGRESS, {}));
+        const savedProgress = migrationResult.progress;
+        if (migrationResult.changed) {
+            saveToStorage(STORAGE_KEYS.PROGRESS, savedProgress);
+        }
+        currentIndex = savedProgress[getProgressKey(activeText)]?.currentIndex ?? 0;
         
         if (currentIndex >= currentContent.length) currentIndex = 0;
         
@@ -896,8 +960,10 @@
     }
 
     function saveProgress() {
+        const activeText = texts.find(t => t.id === activeTextId);
+        if (!activeText) return;
         const prog = loadFromStorage(STORAGE_KEYS.PROGRESS, {});
-        prog[activeTextId] = { currentIndex };
+        prog[getProgressKey(activeText)] = { currentIndex };
         saveToStorage(STORAGE_KEYS.PROGRESS, prog);
     }
 

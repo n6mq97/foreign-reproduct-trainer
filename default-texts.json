@@ -1,12 +1,214 @@
 [
   {
-    "title": "Основы (RU -> EN)",
+    "title": "Основы (по умолчанию)",
     "sentences": [
-      { "ru": "Сегодня отличная погода для прогулки в парке.", "en": "Today is excellent weather for a walk in the park." },
-      { "ru": "Я обычно пью кофе утром, а чай вечером.", "en": "I usually drink coffee in the morning and tea in the evening." },
-      { "ru": "Эта книга лежит на столе возле окна.", "en": "This book is on the table near the window." },
-      { "ru": "Мы планируем поездку в горы на следующие выходные.", "en": "We are planning a trip to the mountains for next weekend." },
-      { "ru": "Не забудь позвонить мне, как только вернешься домой.", "en": "Don't forget to call me as soon as you get home." }
+      {
+        "ru": "Сегодня отличная погода для прогулки в парке.",
+        "en": "Today is excellent weather for a walk in the park."
+      },
+      {
+        "ru": "Я обычно пью кофе утром, а чай вечером.",
+        "en": "I usually drink coffee in the morning and tea in the evening."
+      },
+      {
+        "ru": "Эта книга лежит на столе возле окна.",
+        "en": "This book is on the table near the window."
+      },
+      {
+        "ru": "Мы планируем поездку в горы на следующие выходные.",
+        "en": "We are planning a trip to the mountains for next weekend."
+      },
+      {
+        "ru": "Не забудь позвонить мне, как только вернешься домой.",
+        "en": "Don't forget to call me as soon as you get home."
+      }
+    ]
+  },
+  {
+    "title": "Моя семья",
+    "sentences": [
+      {
+        "ru": "У меня большая семья из шести человек: я, мама, папа, старшая сестра, бабушка и дедушка.",
+        "en": "I have a big family of six: me, Mom, Dad, my older sister, Grandma, and Grandpa."
+      },
+      {
+        "ru": "Мы живем все вместе с собакой Бимом и кошкой Муркой в большом доме в деревне.",
+        "en": "We all live together with our dog Bim and our cat Murka in a big house in the village."
+      },
+      {
+        "ru": "Мой папа встает раньше всех, потому что ему рано на работу.",
+        "en": "My dad gets up before everyone else because he has to go to work early."
+      },
+      {
+        "ru": "Он работает доктором.",
+        "en": "He’s a doctor."
+      },
+      {
+        "ru": "Обычно бабушка готовит нам завтрак.",
+        "en": "Grandma usually makes breakfast for us."
+      },
+      {
+        "ru": "Я обожаю овсяную кашу, а моя сестра Аня – блины.",
+        "en": "I love oatmeal, and my sister Anya loves pancakes."
+      },
+      {
+        "ru": "После завтрака мы собираемся и идем в школу.",
+        "en": "After breakfast, we get ready and go to school."
+      },
+      {
+        "ru": "Моя сестра учится в пятом классе, а я – во втором.",
+        "en": "My sister is in fifth grade, and I’m in second."
+      },
+      {
+        "ru": "Мы любим учиться и играть с друзьями.",
+        "en": "We love studying and playing with our friends."
+      },
+      {
+        "ru": "Больше всего я люблю географию.",
+        "en": "My favorite subject is geography."
+      },
+      {
+        "ru": "Когда мы приходим домой из школы, мы смотрим телевизор, а потом ужинаем и делаем уроки.",
+        "en": "When we come home from school, we watch TV, then have dinner and do our homework."
+      },
+      {
+        "ru": "Иногда мы помогаем бабушке и маме в огороде, где они выращивают овощи и фрукты.",
+        "en": "Sometimes we help Grandma and Mom in the garden, where they grow vegetables and fruit."
+      }
+    ]
+  },
+  {
+    "title": "Мой друг",
+    "sentences": [
+      {
+        "ru": "Привет!",
+        "en": "Hi!"
+      },
+      {
+        "ru": "Меня зовут Андрей!",
+        "en": "My name is Andrei!"
+      },
+      {
+        "ru": "Мне 12 лет.",
+        "en": "I'm 12 years old."
+      },
+      {
+        "ru": "У меня много друзей.",
+        "en": "I have a lot of friends."
+      },
+      {
+        "ru": "Моего лучшего друга зовут Паша.",
+        "en": "My best friend’s name is Pasha."
+      },
+      {
+        "ru": "Мы одного возраста и учимся в одном классе.",
+        "en": "We’re the same age and in the same class."
+      },
+      {
+        "ru": "Он живет в соседнем доме.",
+        "en": "He lives in the house next door."
+      },
+      {
+        "ru": "Мы ходим в школу пешком вместе.",
+        "en": "We walk to school together."
+      },
+      {
+        "ru": "У него короткие светлые волосы, зеленые глаза и добрая улыбка.",
+        "en": "He has short blond hair, green eyes, and a kind smile."
+      },
+      {
+        "ru": "Он очень худой и высокий.",
+        "en": "He’s very skinny and tall."
+      },
+      {
+        "ru": "Паша выше меня на целую голову.",
+        "en": "Pasha is a whole head taller than me."
+      },
+      {
+        "ru": "Он часто смеется и готов помочь.",
+        "en": "He laughs a lot and is always ready to help."
+      },
+      {
+        "ru": "Мы обычно играем в футбол с другими ребятами после школы.",
+        "en": "We usually play soccer with other kids after school."
+      },
+      {
+        "ru": "Мы всегда играем в одной команде.",
+        "en": "We always play on the same team."
+      },
+      {
+        "ru": "Паша очень любит спорт и мечтает стать тренером, когда вырастет.",
+        "en": "Pasha loves sports and dreams of becoming a coach when he grows up."
+      },
+      {
+        "ru": "Иногда мы идем ко мне домой после футбола и делаем вместе домашнюю работу.",
+        "en": "Sometimes we go to my house after soccer and do our homework together."
+      },
+      {
+        "ru": "Паша всегда объясняет мне сложные задачи, потому что учится лучше меня, особенно по математике.",
+        "en": "Pasha always explains difficult problems to me because he’s a better student than I am, especially in math."
+      }
+    ]
+  },
+  {
+    "title": "Моя учительница",
+    "sentences": [
+      {
+        "ru": "Знакомьтесь, это Татьяна Петровна – моя учительница русского языка.",
+        "en": "Meet Tatyana Petrovna—my Russian teacher."
+      },
+      {
+        "ru": "У нее есть муж Николай и трое детей.",
+        "en": "She has a husband named Nikolai and three children."
+      },
+      {
+        "ru": "У нее нет времени на домашних животных.",
+        "en": "She doesn’t have time for pets."
+      },
+      {
+        "ru": "Она встает в семь утра и едет в школу на машине.",
+        "en": "She gets up at seven in the morning and drives to school."
+      },
+      {
+        "ru": "Когда она приезжает на работу, она готовит класс к уроку.",
+        "en": "When she arrives at work, she prepares the classroom for the lesson."
+      },
+      {
+        "ru": "Обычно она одета в длинную черную юбку и белую кофту.",
+        "en": "She usually wears a long black skirt and a white blouse."
+      },
+      {
+        "ru": "Она всегда носит золотые сережки.",
+        "en": "She always wears gold earrings."
+      },
+      {
+        "ru": "Это подарок ее мужа.",
+        "en": "They were a gift from her husband."
+      },
+      {
+        "ru": "Она очень добрая, любит свою работу и детей, внимательно слушает учеников и понятно объясняет предмет.",
+        "en": "She is very kind, loves her job and the children, listens attentively to her students, and explains the subject clearly."
+      },
+      {
+        "ru": "Школьники любят ее.",
+        "en": "The students love her."
+      },
+      {
+        "ru": "Когда она приходит домой она убирается, пылесосит, готовит ужин, купает детей и читает им сказки на ночь.",
+        "en": "When she comes home, she cleans up, vacuums, cooks dinner, bathes the children, and reads them bedtime stories."
+      },
+      {
+        "ru": "Николай помогает ей по дому.",
+        "en": "Nikolai helps her with the housework."
+      },
+      {
+        "ru": "Когда дети ложатся спать, она садится проверять домашние задания.",
+        "en": "When the children go to bed, she sits down to check their homework."
+      },
+      {
+        "ru": "По пятницам Николай и Татьяна ужинают в ресторане, а по воскресеньям отдыхают всей семьей в парке.",
+        "en": "On Fridays, Nikolai and Tatiana have dinner at a restaurant, and on Sundays, the whole family relaxes in the park."
+      }
     ]
   }
 ]
