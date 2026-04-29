@@ -123,6 +123,7 @@
             border: 2px solid transparent;
             transition: all 0.25s ease;
             line-height: 1.5;
+            scroll-margin-top: 12px;
         }
         .ru-sentence.active {
             background: var(--active-bg);
@@ -703,7 +704,6 @@
     const restartBtn = document.getElementById('restartBtn');
     const feedback = document.getElementById('feedback');
     const isMobile = window.matchMedia('(max-width: 768px)');
-    let keyboardWasOpen = false;
 
     function normalize(str) {
         return str.trim().toLowerCase().replace(/[^\w\s']/g, '').replace(/\s+/g, ' ');
@@ -713,15 +713,6 @@
         userInput.style.height = 'auto';
         const nextHeight = Math.min(userInput.scrollHeight, isMobile.matches ? 140 : 180);
         userInput.style.height = `${Math.max(nextHeight, 52)}px`;
-    }
-
-    function scrollToReadingPosition() {
-        if (!isMobile.matches) return;
-        const sourcePanel = document.querySelector('.ru-panel');
-        if (sourcePanel) {
-            sourcePanel.scrollTo({ top: sourcePanel.scrollHeight, behavior: 'smooth' });
-        }
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     }
 
     function syncMobileKeyboardOffset() {
@@ -736,11 +727,13 @@
         }
         const keyboardOffset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
         document.documentElement.style.setProperty('--mobile-keyboard-offset', `${keyboardOffset}px`);
-        const isKeyboardOpen = keyboardOffset > 80;
-        if (isKeyboardOpen && !keyboardWasOpen) {
-            scrollToReadingPosition();
-        }
-        keyboardWasOpen = isKeyboardOpen;
+    }
+
+    function scrollToActiveSentenceOnMobileKeyboard() {
+        if (!isMobile.matches) return;
+        const activeSentence = document.querySelector('.ru-sentence.active');
+        if (!activeSentence) return;
+        activeSentence.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function initTrainer() {
@@ -892,7 +885,11 @@
         window.visualViewport.addEventListener('scroll', syncMobileKeyboardOffset);
     }
     window.addEventListener('resize', syncMobileKeyboardOffset);
-    userInput.addEventListener('focus', syncMobileKeyboardOffset);
+    userInput.addEventListener('focus', () => {
+        syncMobileKeyboardOffset();
+        setTimeout(scrollToActiveSentenceOnMobileKeyboard, 80);
+        setTimeout(scrollToActiveSentenceOnMobileKeyboard, 260);
+    });
     userInput.addEventListener('blur', () => {
         setTimeout(syncMobileKeyboardOffset, 120);
     });
