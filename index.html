@@ -420,17 +420,25 @@
 
             <!-- Tab: JSON Input -->
             <div id="tab-json" class="tab-content hidden">
-                <div class="name-input-row">
-                    <label>Название текста (опционально)</label>
-                    <input type="text" id="textNameJson" placeholder="Например: Тестовые фразы">
-                </div>
                 <p style="margin-top:0; color: var(--text-muted); font-size: 0.9rem;">Вставьте JSON массив:</p>
                 <textarea id="jsonInput" placeholder='[
-  { "ru": "Привет.", "en": "Hi." },
-  { "ru": "Как дела?", "en": "How are you?" }
+  {
+    "title": "Базовые фразы",
+    "sentences": [
+      { "ru": "Привет.", "en": "Hi." },
+      { "ru": "Как дела?", "en": "How are you?" }
+    ]
+  },
+  {
+    "title": "Офис",
+    "sentences": [
+      { "ru": "Я отправил письмо.", "en": "I sent the email." }
+    ]
+  }
 ]'></textarea>
                 <div id="jsonError" class="error-msg"></div>
-                <button class="btn btn-primary" id="saveJson" style="width:100%">Сохранить JSON</button>
+                <button class="btn btn-primary" id="saveJson" style="width:100%; margin-bottom: 10px;">Сохранить JSON</button>
+                <button class="btn btn-secondary" id="exportJson" style="width:100%">Экспортировать все тексты</button>
             </div>
 
             <!-- List -->
@@ -596,57 +604,118 @@
     document.getElementById('saveJson').onclick = () => {
         const errEl = document.getElementById('jsonError');
         errEl.textContent = '';
-        const customName = document.getElementById('textNameJson').value.trim();
         
         try {
             const data = JSON.parse(document.getElementById('jsonInput').value);
             if (!Array.isArray(data)) throw new Error('JSON должен быть массивом []');
             if (data.length === 0) throw new Error('Массив не должен быть пустым');
-            
-            data.forEach((item, i) => {
-                if (!item.ru || !item.en || typeof item.ru !== 'string' || typeof item.en !== 'string') {
-                    throw new Error(`Элемент ${i+1} должен содержать строки "ru" и "en"`);
+            texts = loadFromStorage(STORAGE_KEYS.TEXTS, []);
+            let importedCount = 0;
+            let duplicateCount = 0;
+
+            data.forEach((entry, i) => {
+                if (!entry || typeof entry !== 'object') {
+                    throw new Error(`Элемент ${i + 1} должен быть объектом`);
                 }
+                if (!entry.title || typeof entry.title !== 'string') {
+                    throw new Error(`Элемент ${i + 1}: поле "title" обязательно и должно быть строкой`);
+                }
+                if (!Array.isArray(entry.sentences) || entry.sentences.length === 0) {
+                    throw new Error(`Элемент ${i + 1}: поле "sentences" должно быть непустым массивом`);
+                }
+
+                entry.sentences.forEach((sentence, j) => {
+                    if (!sentence || typeof sentence !== 'object') {
+                        throw new Error(`Элемент ${i + 1}, предложение ${j + 1} должно быть объектом`);
+                    }
+                    if (typeof sentence.ru !== 'string' || typeof sentence.en !== 'string' || !sentence.ru.trim() || !sentence.en.trim()) {
+                        throw new Error(`Элемент ${i + 1}, предложение ${j + 1} должно содержать непустые строки "ru" и "en"`);
+                    }
+                });
+
+                const normalizedContent = entry.sentences.map(sentence => ({
+                    ru: sentence.ru.trim(),
+                    en: sentence.en.trim()
+                }));
+                const hash = hashArray(normalizedContent);
+                if (texts.some(t => t.hash === hash)) {
+                    duplicateCount++;
+                    return;
+                }
+
+                texts.push({
+                    id: 'txt_' + Date.now().toString(36) + '_' + importedCount.toString(36),
+                    name: entry.title.trim(),
+                    content: normalizedContent,
+                    hash
+                });
+                importedCount++;
             });
 
-            const hash = hashArray(data);
-            if (texts.some(t => t.hash === hash)) {
-                throw new Error('Такой текст уже сохранен.');
+            if (importedCount === 0 && duplicateCount > 0) {
+                throw new Error('Все тексты из JSON уже существуют.');
             }
 
-            const newText = {
-                id: 'txt_' + Date.now().toString(36),
-                name: customName || `JSON Import (${data.length} предложений)`,
-                content: data,
-                hash
-            };
-
-            texts.push(newText);
             saveToStorage(STORAGE_KEYS.TEXTS, texts);
             document.getElementById('jsonInput').value = '';
-            document.getElementById('textNameJson').value = '';
             renderTextList();
-            showToast('JSON успешно импортирован');
+            if (duplicateCount > 0) {
+                showToast(`Импортировано: ${importedCount}. Пропущено дублей: ${duplicateCount}`);
+            } else {
+                showToast(`Импортировано текстов: ${importedCount}`);
+            }
         } catch (err) {
             errEl.textContent = '❌ ' + err.message;
         }
     };
 
+    document.getElementById('exportJson').onclick = () => {
+        const exportData = loadFromStorage(STORAGE_KEYS.TEXTS, []).map(text => ({
+            title: text.name,
+            sentences: (text.content || []).map(sentence => ({
+                ru: sentence.ru,
+                en: sentence.en
+            }))
+        }));
+
+        if (!exportData.length) {
+            showToast('Нет текстов для экспорта');
+            return;
+        }
+
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const now = new Date();
+        const datePart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        link.href = url;
+        link.download = `trainer-texts-${datePart}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        showToast('Экспорт завершен');
+    };
+
     function renderTextList() {
         // Всегда берем свежие данные
         texts = loadFromStorage(STORAGE_KEYS.TEXTS, []);
+        const progress = loadFromStorage(STORAGE_KEYS.PROGRESS, {});
         textListEl.innerHTML = '';
         if (texts.length === 0) {
             textListEl.innerHTML = '<p style="text-align:center; color:var(--text-muted)">Нет сохранённых текстов</p>';
             return;
         }
         texts.forEach(t => {
+            const total = t.content.length;
+            const current = Math.min(progress[t.id]?.currentIndex ?? 0, total);
+            const percent = total > 0 ? Math.round((current / total) * 100) : 0;
             const div = document.createElement('div');
             div.className = `text-item ${t.id === activeTextId ? 'active' : ''}`;
             div.innerHTML = `
                 <div class="text-info">
                     <h3>${t.name}</h3>
-                    <p>${t.content.length} предложений</p>
+                    <p>${total} предложений • Прогресс: ${current}/${total} (${percent}%)</p>
                 </div>
                 <div class="text-actions">
                     <button class="btn btn-sm btn-primary load-text-btn" data-id="${t.id}">Загрузить</button>
