@@ -733,7 +733,10 @@
         if (!isMobile.matches) return;
         const activeSentence = document.querySelector('.ru-sentence.active');
         if (!activeSentence) return;
-        activeSentence.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const activeIndex = Number(activeSentence.dataset.index);
+        const targetIndex = Number.isNaN(activeIndex) ? 0 : Math.max(0, activeIndex - 1);
+        const targetSentence = document.querySelector(`.ru-sentence[data-index="${targetIndex}"]`) || activeSentence;
+        targetSentence.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function initTrainer() {
