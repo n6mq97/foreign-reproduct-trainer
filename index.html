@@ -113,6 +113,7 @@
             overflow-y: auto;
             display: flex;
             flex-direction: column;
+            padding-top: 0px;
         }
 
         .panel h2 {
@@ -127,6 +128,8 @@
             padding-bottom: 10px;
             z-index: 2;
             border-bottom: 2px solid #eee;
+            padding-top: 20px;
+            margin-right: -20px;
         }
 
         .sentence-list {
@@ -330,14 +333,37 @@
                 height: 100dvh;
             }
             .app-header {
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
                 margin-bottom: 0;
                 padding: 12px 14px;
                 background: var(--panel);
                 border-bottom: 1px solid var(--border);
             }
+            .app-header h1 {
+                font-size: 1.2rem;
+            }
             .header-actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                width: 100%;
+            }
+            .mode-switch {
+                grid-column: 1 / -1;
                 justify-content: space-between;
-                flex-wrap: wrap;
+                width: 100%;
+            }
+            .mode-switch select {
+                flex: 1;
+                min-width: 0;
+            }
+            .header-actions .btn {
+                width: 100%;
+                padding: 10px 12px;
+                font-size: 0.9rem;
             }
             .trainer-wrapper {
                 max-width: 100%;
@@ -386,6 +412,7 @@
                 <option value="hard">Сложный</option>
             </select>
         </label>
+        <button class="btn btn-secondary" id="openVocabulary">Словарный запас: 0</button>
         <button class="btn btn-primary" id="openManager">📚 Выбрать текст</button>
     </div>
 </div>
@@ -481,6 +508,19 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="vocabularyModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Словарный запас</h2>
+            <button class="btn btn-sm btn-secondary" id="closeVocabularyModal">✕</button>
+        </div>
+        <div class="modal-body">
+            <p id="vocabularyCount" style="margin-top: 0; color: var(--text-muted);"></p>
+            <div id="vocabularyList"></div>
+        </div>
+    </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -489,7 +529,8 @@
         TEXTS: 'trainer_texts',
         PROGRESS: 'trainer_progress',
         ACTIVE_ID: 'trainer_active_id',
-        MODE: 'trainer_mode'
+        MODE: 'trainer_mode',
+        VOCABULARY: 'trainer_vocabulary'
     };
     const DEFAULT_TEXTS_FILE = './default-texts.json';
 
@@ -623,6 +664,10 @@
 
     const managerModal = document.getElementById('managerModal');
     const textListEl = document.getElementById('textList');
+    const vocabularyModal = document.getElementById('vocabularyModal');
+    const vocabularyCountEl = document.getElementById('vocabularyCount');
+    const vocabularyListEl = document.getElementById('vocabularyList');
+    const openVocabularyBtn = document.getElementById('openVocabulary');
 
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -644,6 +689,53 @@
     };
 
     document.getElementById('closeModal').onclick = () => managerModal.classList.remove('open');
+    document.getElementById('closeVocabularyModal').onclick = () => vocabularyModal.classList.remove('open');
+
+    function getVocabularySet() {
+        const words = loadFromStorage(STORAGE_KEYS.VOCABULARY, []);
+        if (!Array.isArray(words)) return new Set();
+        return new Set(words.filter(word => typeof word === 'string' && word.trim()).map(word => word.trim().toLowerCase()));
+    }
+
+    function saveVocabularySet(vocabularySet) {
+        saveToStorage(STORAGE_KEYS.VOCABULARY, Array.from(vocabularySet).sort((a, b) => a.localeCompare(b)));
+    }
+
+    function extractWords(text) {
+        return String(text || '').toLowerCase().match(/\p{L}+/gu) || [];
+    }
+
+    function updateVocabularyCount() {
+        const vocabularySet = getVocabularySet();
+        openVocabularyBtn.textContent = `Словарный запас: ${vocabularySet.size}`;
+    }
+
+    function addWordsToVocabulary(text) {
+        const words = extractWords(text);
+        if (!words.length) return;
+        const vocabularySet = getVocabularySet();
+        const sizeBefore = vocabularySet.size;
+        words.forEach(word => vocabularySet.add(word));
+        if (vocabularySet.size !== sizeBefore) {
+            saveVocabularySet(vocabularySet);
+            updateVocabularyCount();
+        }
+    }
+
+    function renderVocabularyModal() {
+        const words = Array.from(getVocabularySet()).sort((a, b) => a.localeCompare(b));
+        vocabularyCountEl.textContent = `Уникальных слов: ${words.length}`;
+        if (!words.length) {
+            vocabularyListEl.innerHTML = '<p style="color: var(--text-muted); margin: 0;">Пока нет сохраненных слов.</p>';
+            return;
+        }
+        vocabularyListEl.innerHTML = words.map(word => `<div class="en-sentence">${word}</div>`).join('');
+    }
+
+    openVocabularyBtn.onclick = () => {
+        renderVocabularyModal();
+        vocabularyModal.classList.add('open');
+    };
 
     // --- Text Input ---
     document.getElementById('addTextBtnText').onclick = () => {
@@ -1017,6 +1109,7 @@
         feedback.classList.add('hidden');
 
         if (userVal === targetVal) {
+            addWordsToVocabulary(userInput.value);
             currentIndex++;
             saveProgress();
             renderEN();
@@ -1107,6 +1200,7 @@
     // Init
     async function bootstrap() {
         await initStorage();
+        updateVocabularyCount();
         initTrainer();
         syncMobileKeyboardOffset();
         resizeUserInput();
