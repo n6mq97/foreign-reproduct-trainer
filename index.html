@@ -45,6 +45,26 @@
         }
 
         .app-header h1 { margin: 0; font-size: 1.4rem; }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .mode-switch {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+        .mode-switch select {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 6px 10px;
+            background: #fff;
+            color: var(--text);
+            font-size: 0.9rem;
+        }
 
         .btn {
             padding: 10px 18px;
@@ -315,6 +335,10 @@
                 background: var(--panel);
                 border-bottom: 1px solid var(--border);
             }
+            .header-actions {
+                justify-content: space-between;
+                flex-wrap: wrap;
+            }
             .trainer-wrapper {
                 max-width: 100%;
                 border-radius: 0;
@@ -354,7 +378,16 @@
 
 <div class="app-header">
     <h1>Тренажер перевода</h1>
-    <button class="btn btn-primary" id="openManager">📚 Выбрать текст</button>
+    <div class="header-actions">
+        <label class="mode-switch">
+            <span>Режим:</span>
+            <select id="trainingMode">
+                <option value="normal">Нормальный</option>
+                <option value="hard">Сложный</option>
+            </select>
+        </label>
+        <button class="btn btn-primary" id="openManager">📚 Выбрать текст</button>
+    </div>
 </div>
 
 <div class="trainer-wrapper">
@@ -455,7 +488,8 @@
     const STORAGE_KEYS = {
         TEXTS: 'trainer_texts',
         PROGRESS: 'trainer_progress',
-        ACTIVE_ID: 'trainer_active_id'
+        ACTIVE_ID: 'trainer_active_id',
+        MODE: 'trainer_mode'
     };
     const DEFAULT_TEXTS_FILE = './default-texts.json';
 
@@ -844,6 +878,7 @@
     let currentIndex = 0;
     let isWaitingForGotIt = false;
     let isFinished = false;
+    let trainingMode = loadFromStorage(STORAGE_KEYS.MODE, 'normal');
 
     const ruList = document.getElementById('ruList');
     const enList = document.getElementById('enList');
@@ -852,7 +887,12 @@
     const gotItBtn = document.getElementById('gotItBtn');
     const restartBtn = document.getElementById('restartBtn');
     const feedback = document.getElementById('feedback');
+    const trainingModeEl = document.getElementById('trainingMode');
     const isMobile = window.matchMedia('(max-width: 768px)');
+
+    function resolveTrainingMode(mode) {
+        return mode === 'hard' ? 'hard' : 'normal';
+    }
 
     function normalize(str) {
         return str
@@ -998,7 +1038,11 @@
     }
 
     function handleGotIt() {
-        currentIndex = Math.max(0, currentIndex - 1);
+        if (trainingMode === 'hard') {
+            currentIndex = 0;
+        } else {
+            currentIndex = Math.max(0, currentIndex - 1);
+        }
         saveProgress();
         
         isWaitingForGotIt = false;
@@ -1044,6 +1088,12 @@
         window.visualViewport.addEventListener('resize', syncMobileKeyboardOffset);
         window.visualViewport.addEventListener('scroll', syncMobileKeyboardOffset);
     }
+    trainingMode = resolveTrainingMode(trainingMode);
+    trainingModeEl.value = trainingMode;
+    trainingModeEl.addEventListener('change', () => {
+        trainingMode = resolveTrainingMode(trainingModeEl.value);
+        saveToStorage(STORAGE_KEYS.MODE, trainingMode);
+    });
     window.addEventListener('resize', syncMobileKeyboardOffset);
     userInput.addEventListener('focus', () => {
         syncMobileKeyboardOffset();
