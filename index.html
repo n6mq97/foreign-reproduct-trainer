@@ -406,13 +406,6 @@
 <div class="app-header">
     <h1>Тренажер перевода</h1>
     <div class="header-actions">
-        <label class="mode-switch">
-            <span>Режим:</span>
-            <select id="trainingMode">
-                <option value="normal">Нормальный</option>
-                <option value="hard">Сложный</option>
-            </select>
-        </label>
         <button class="btn btn-secondary" id="openVocabulary">Словарный запас: 0</button>
         <button class="btn btn-primary" id="openManager">📚 Выбрать текст</button>
     </div>
@@ -455,6 +448,7 @@
             <div class="modal-tabs">
                 <button class="tab-btn active" data-tab="text">Вставка текста</button>
                 <button class="tab-btn" data-tab="json">JSON импорт</button>
+                <button class="tab-btn" data-tab="manage">Управление</button>
             </div>
 
             <!-- Tab: Text Input -->
@@ -500,6 +494,17 @@
                 <div id="jsonError" class="error-msg"></div>
                 <button class="btn btn-primary" id="saveJson" style="width:100%; margin-bottom: 10px;">Сохранить JSON</button>
                 <button class="btn btn-secondary" id="exportJson" style="width:100%">Экспортировать все тексты</button>
+            </div>
+
+            <div id="tab-manage" class="tab-content hidden">
+                <label class="mode-switch" style="display:flex; margin-bottom: 12px;">
+                    <span>Режим:</span>
+                    <select id="trainingMode">
+                        <option value="normal">Нормальный</option>
+                        <option value="hard">Сложный</option>
+                    </select>
+                </label>
+                <button class="btn btn-danger" id="clearStorageBtn" style="width:100%">Очистить localStorage</button>
             </div>
 
             <!-- List -->
@@ -669,6 +674,7 @@
     const vocabularyCountEl = document.getElementById('vocabularyCount');
     const vocabularyListEl = document.getElementById('vocabularyList');
     const openVocabularyBtn = document.getElementById('openVocabulary');
+    const clearStorageBtn = document.getElementById('clearStorageBtn');
 
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -736,6 +742,22 @@
     openVocabularyBtn.onclick = () => {
         renderVocabularyModal();
         vocabularyModal.classList.add('open');
+    };
+
+    clearStorageBtn.onclick = async () => {
+        const confirmed = window.confirm('Удалить все сохраненные тексты, прогресс и словарь?');
+        if (!confirmed) return;
+
+        Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
+        await initStorage();
+        initTrainer();
+        updateVocabularyCount();
+        showToast('localStorage очищен');
+        if (managerModal.classList.contains('open')) {
+            texts = loadFromStorage(STORAGE_KEYS.TEXTS, []);
+            activeTextId = loadFromStorage(STORAGE_KEYS.ACTIVE_ID, '');
+            renderTextList();
+        }
     };
 
     // --- Text Input ---
@@ -969,6 +991,7 @@
     // ==================== ЛОГИКА ТРЕНАЖЕРА ====================
     let currentContent = [];
     let currentIndex = 0;
+    let furthestIndexReached = 0;
     let isWaitingForGotIt = false;
     let isFinished = false;
     let trainingMode = loadFromStorage(STORAGE_KEYS.MODE, 'normal');
@@ -1039,9 +1062,16 @@
         if (migrationResult.changed) {
             saveToStorage(STORAGE_KEYS.PROGRESS, savedProgress);
         }
-        currentIndex = savedProgress[getProgressKey(activeText)]?.currentIndex ?? 0;
+        const progressEntry = savedProgress[getProgressKey(activeText)] || {};
+        currentIndex = progressEntry.currentIndex ?? 0;
         
         if (currentIndex >= currentContent.length) currentIndex = 0;
+        if (currentContent.length === 0) {
+            furthestIndexReached = 0;
+        } else {
+            const savedFurthest = Number.isInteger(progressEntry.furthestIndex) ? progressEntry.furthestIndex : currentIndex;
+            furthestIndexReached = Math.max(currentIndex, Math.min(savedFurthest, currentContent.length - 1));
+        }
         
         isFinished = false;
         isWaitingForGotIt = false;
@@ -1062,7 +1092,8 @@
 
     function renderRU() {
         ruList.innerHTML = '';
-        currentContent.forEach((s, i) => {
+        const visibleCount = Math.min(currentContent.length, Math.max(1, furthestIndexReached + 1));
+        currentContent.slice(0, visibleCount).forEach((s, i) => {
             const div = document.createElement('div');
             div.className = 'ru-sentence';
             div.textContent = s.ru;
@@ -1098,7 +1129,7 @@
         const activeText = texts.find(t => t.id === activeTextId);
         if (!activeText) return;
         const prog = loadFromStorage(STORAGE_KEYS.PROGRESS, {});
-        prog[getProgressKey(activeText)] = { currentIndex };
+        prog[getProgressKey(activeText)] = { currentIndex, furthestIndex: furthestIndexReached };
         saveToStorage(STORAGE_KEYS.PROGRESS, prog);
     }
 
@@ -1112,6 +1143,10 @@
         if (userVal === targetVal) {
             addWordsToVocabulary(userInput.value);
             currentIndex++;
+            if (currentContent.length > 0 && currentIndex < currentContent.length) {
+                furthestIndexReached = Math.max(furthestIndexReached, currentIndex);
+                renderRU();
+            }
             saveProgress();
             renderEN();
             if (currentIndex >= currentContent.length) {
@@ -1164,6 +1199,7 @@
     document.getElementById('restartBtn').onclick = () => {
         if (confirm('Сбросить прогресс по этому тексту?')) {
             currentIndex = 0;
+            furthestIndexReached = 0;
             saveProgress();
             initTrainer();
         }
