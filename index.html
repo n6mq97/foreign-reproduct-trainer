@@ -270,16 +270,21 @@
             font-weight: 600;
         }
 
-        .text-item {
+        .text-item, .collection-item {
             display: flex; justify-content: space-between; align-items: center;
             padding: 12px; border: 1px solid var(--border); border-radius: 8px;
             margin-bottom: 10px; cursor: pointer; transition: background 0.2s;
         }
+        .collection-item { cursor: default; }
         .text-item:hover { background: #f8f9fa; }
+        .collection-item:hover { background: #f8f9fa; }
         .text-item.active { border-color: var(--accent); background: var(--active-bg); }
         .text-info h3 { margin: 0 0 4px; font-size: 1rem; }
         .text-info p { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
         .text-actions { display: flex; gap: 8px; }
+        .manager-nav {
+            margin-bottom: 12px;
+        }
 
         textarea {
             width: 100%; height: 150px; padding: 10px;
@@ -447,7 +452,6 @@
         <div class="modal-body">
             <div class="modal-tabs">
                 <button class="tab-btn active" data-tab="text">Вставка текста</button>
-                <button class="tab-btn" data-tab="json">JSON импорт</button>
                 <button class="tab-btn" data-tab="manage">Управление</button>
             </div>
 
@@ -473,38 +477,17 @@
                 <button class="btn btn-primary" id="addTextBtnText" style="width:100%">Разобрать и сохранить</button>
             </div>
 
-            <!-- Tab: JSON Input -->
-            <div id="tab-json" class="tab-content hidden">
-                <p style="margin-top:0; color: var(--text-muted); font-size: 0.9rem;">Вставьте JSON массив:</p>
-                <textarea id="jsonInput" placeholder='[
-  {
-    "title": "Базовые фразы",
-    "sentences": [
-      { "ru": "Привет.", "en": "Hi." },
-      { "ru": "Как дела?", "en": "How are you?" }
-    ]
-  },
-  {
-    "title": "Офис",
-    "sentences": [
-      { "ru": "Я отправил письмо.", "en": "I sent the email." }
-    ]
-  }
-]'></textarea>
-                <div id="jsonError" class="error-msg"></div>
-                <button class="btn btn-primary" id="saveJson" style="width:100%; margin-bottom: 10px;">Сохранить JSON</button>
-                <button class="btn btn-secondary" id="exportJson" style="width:100%">Экспортировать все тексты</button>
-            </div>
-
             <div id="tab-manage" class="tab-content hidden">
                 <label class="mode-switch" style="display:flex; margin-bottom: 12px;">
                     <span>Режим:</span>
                     <select id="trainingMode">
+                        <option value="easy">Легкий</option>
                         <option value="normal">Нормальный</option>
                         <option value="hard">Сложный</option>
                     </select>
                 </label>
-                <button class="btn btn-danger" id="clearStorageBtn" style="width:100%">Очистить localStorage</button>
+                <button class="btn btn-secondary" id="exportJson" style="width:100%; margin-bottom: 10px;">Экспортировать текущую коллекцию (JSON)</button>
+                <button class="btn btn-danger" id="clearStorageBtn" style="width:100%">Очистить сохранённые данные (прогресс, словарь)</button>
             </div>
 
             <!-- List -->
@@ -532,14 +515,19 @@
 <script>
     // ==================== УТИЛИТЫ И ХРАНИЛИЩЕ ====================
     const STORAGE_KEYS = {
-        TEXTS: 'trainer_texts',
         PROGRESS: 'trainer_progress',
         ACTIVE_ID: 'trainer_active_id',
         MODE: 'trainer_mode',
         VOCABULARY: 'trainer_vocabulary'
     };
-    const DEFAULT_TEXTS_FILE = './default-texts.json';
 
+    let fileTexts = [];
+    let memoryTexts = [];
+    const contentCollectionFiles = new Map();
+
+    function getAllTexts() {
+        return [...fileTexts, ...memoryTexts];
+    }
     function loadFromStorage(key, fallback) {
         try {
             const data = localStorage.getItem(key);
@@ -549,6 +537,24 @@
 
     function saveToStorage(key, value) {
         localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    function escapeHtml(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function ruTextCountLabel(n) {
+        const x = Math.abs(Number(n)) || 0;
+        const m10 = x % 10;
+        const m100 = x % 100;
+        if (m100 >= 11 && m100 <= 14) return `${x} текстов`;
+        if (m10 === 1) return `${x} текст`;
+        if (m10 >= 2 && m10 <= 4) return `${x} текста`;
+        return `${x} текстов`;
     }
 
     function showToast(msg) {
@@ -596,11 +602,9 @@
         return { progress: nextProgress, changed };
     }
 
-    // Надёжное разбиение текста на предложения
     function splitIntoSentences(text) {
         if (!text || !text.trim()) return [];
-        // Заменяем точку/воскл/вопрос+пробел на разделитель, затем бьём по строкам и разделителям
-        return text.replace(/([.!?])\s+/g, "$1|")
+        return text.replace(/([.!?])(["'\u201D\u2019»]*)\s+/g, "$1$2|")
                    .split("\n")
                    .map(line => line.split("|"))
                    .flat()
@@ -608,68 +612,97 @@
                    .filter(s => s.length > 0);
     }
 
-    // ==================== ДАННЫЕ ПО УМОЛЧАНИЮ ====================
-    async function loadDefaultTexts() {
+    function slugFromContentFilename(name) {
+        const base = String(name || '').replace(/\.json$/i, '').trim();
+        const slug = base.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_|_$/g, '');
+        return slug || 'file';
+    }
+
+    function normalizeChaptersFromEntries(entries, slug, collectionHeading, collectionId) {
+        if (!Array.isArray(entries)) return [];
+        return entries
+            .map((entry, index) => {
+                const title = typeof entry?.title === 'string' ? entry.title.trim() : '';
+                const sentences = Array.isArray(entry?.sentences)
+                    ? entry.sentences.filter(item => typeof item?.ru === 'string' && typeof item?.en === 'string')
+                    : [];
+                if (!title || !sentences.length) return null;
+                const content = sentences.map(sentence => ({ ru: sentence.ru.trim(), en: sentence.en.trim() }))
+                    .filter(sentence => sentence.ru && sentence.en);
+                if (!content.length) return null;
+                return {
+                    id: `default_${slug}_${String(index + 1).padStart(3, '0')}`,
+                    name: title,
+                    content,
+                    hash: hashArray(content),
+                    collectionHeading,
+                    collectionId
+                };
+            })
+            .filter(Boolean);
+    }
+
+    async function loadContentTexts() {
+        contentCollectionFiles.clear();
         try {
-            const response = await fetch(DEFAULT_TEXTS_FILE, { cache: 'no-store' });
-            if (!response.ok) return [];
-            const data = await response.json();
-            if (!Array.isArray(data)) return [];
-            return data
-                .map((entry, index) => {
-                    const title = typeof entry?.title === 'string' ? entry.title.trim() : '';
-                    const sentences = Array.isArray(entry?.sentences)
-                        ? entry.sentences.filter(item => typeof item?.ru === 'string' && typeof item?.en === 'string')
-                        : [];
-                    if (!title || !sentences.length) return null;
-                    const content = sentences.map(sentence => ({ ru: sentence.ru.trim(), en: sentence.en.trim() }))
-                        .filter(sentence => sentence.ru && sentence.en);
-                    if (!content.length) return null;
-                    return {
-                        id: `default_${String(index + 1).padStart(3, '0')}`,
-                        name: title,
-                        content,
-                        hash: hashArray(content)
-                    };
-                })
-                .filter(Boolean);
+            const manifestRes = await fetch('./content/manifest.json', { cache: 'no-store' });
+            if (!manifestRes.ok) return [];
+            const manifest = await manifestRes.json();
+            if (!Array.isArray(manifest)) return [];
+            const all = [];
+            for (const file of manifest) {
+                if (typeof file !== 'string' || !file.trim().toLowerCase().endsWith('.json')) continue;
+                const safeFile = file.replace(/^.*[\\/]/, '');
+                const slug = slugFromContentFilename(safeFile);
+                const res = await fetch(`./content/${encodeURIComponent(safeFile)}`, { cache: 'no-store' });
+                if (!res.ok) continue;
+                const data = await res.json();
+                let entries;
+                let collectionHeading;
+                if (Array.isArray(data)) {
+                    entries = data;
+                    collectionHeading = safeFile.replace(/\.json$/i, '') || slug;
+                } else if (data && typeof data === 'object' && Array.isArray(data.items)) {
+                    entries = data.items;
+                    const h = typeof data.heading === 'string' ? data.heading.trim() : '';
+                    collectionHeading = h || safeFile.replace(/\.json$/i, '') || slug;
+                } else {
+                    continue;
+                }
+                const collId = `content_${slug}`;
+                contentCollectionFiles.set(collId, safeFile);
+                all.push(...normalizeChaptersFromEntries(entries, slug, collectionHeading, collId));
+            }
+            return all;
         } catch {
             return [];
         }
     }
 
     async function initStorage() {
-        let texts = loadFromStorage(STORAGE_KEYS.TEXTS, []);
-        const defaultTexts = await loadDefaultTexts();
-        if (defaultTexts.length) {
-            const existingHashes = new Set(texts.map(t => t.hash));
-            const existingNames = new Set(texts.map(t => normalizeTextName(t.name)));
-            const mergedDefaults = defaultTexts.filter((text) => {
-                const nameKey = normalizeTextName(text.name);
-                return !existingHashes.has(text.hash) && !existingNames.has(nameKey);
-            });
-            if (mergedDefaults.length) {
-                texts = [...texts, ...mergedDefaults];
-                saveToStorage(STORAGE_KEYS.TEXTS, texts);
-            }
-        }
-        if (texts.length && !loadFromStorage(STORAGE_KEYS.ACTIVE_ID, '')) {
-            saveToStorage(STORAGE_KEYS.ACTIVE_ID, texts[0].id);
+        try {
+            localStorage.removeItem('trainer_texts');
+        } catch (_) {}
+        fileTexts = await loadContentTexts();
+        memoryTexts = [];
+        const all = getAllTexts();
+        if (all.length && !loadFromStorage(STORAGE_KEYS.ACTIVE_ID, '')) {
+            saveToStorage(STORAGE_KEYS.ACTIVE_ID, all[0].id);
         }
 
         const savedProgress = loadFromStorage(STORAGE_KEYS.PROGRESS, {});
-        const migrationResult = migrateProgressToTextNames(texts, savedProgress);
+        const migrationResult = migrateProgressToTextNames(all, savedProgress);
         if (migrationResult.changed) {
             saveToStorage(STORAGE_KEYS.PROGRESS, migrationResult.progress);
         }
     }
 
     // ==================== МЕНЕДЖЕР ТЕКСТОВ ====================
-    let texts = [];
     let activeTextId = '';
 
     const managerModal = document.getElementById('managerModal');
     const textListEl = document.getElementById('textList');
+    let managerCollectionId = null;
     const vocabularyModal = document.getElementById('vocabularyModal');
     const vocabularyCountEl = document.getElementById('vocabularyCount');
     const vocabularyListEl = document.getElementById('vocabularyList');
@@ -684,13 +717,19 @@
             btn.classList.add('active');
             document.getElementById(`tab-${btn.dataset.tab}`).classList.remove('hidden');
             document.getElementById('textError').textContent = '';
-            document.getElementById('jsonError').textContent = '';
         });
     });
 
     document.getElementById('openManager').onclick = () => {
-        texts = loadFromStorage(STORAGE_KEYS.TEXTS, []);
         activeTextId = loadFromStorage(STORAGE_KEYS.ACTIVE_ID, '');
+        const groups = buildTextGroups(getAllTexts());
+        if (groups.length > 1) {
+            const activeText = getAllTexts().find((t) => t.id === activeTextId);
+            const cid = activeText ? (activeText.collectionId ?? '__manual__') : null;
+            managerCollectionId = cid && groups.some((g) => g.collectionId === cid) ? cid : null;
+        } else {
+            managerCollectionId = null;
+        }
         renderTextList();
         managerModal.classList.add('open');
     };
@@ -745,17 +784,20 @@
     };
 
     clearStorageBtn.onclick = async () => {
-        const confirmed = window.confirm('Удалить все сохраненные тексты, прогресс и словарь?');
+        const confirmed = window.confirm('Удалить сохранённый прогресс, словарь и режим? Добавленные в этой сессии тексты исчезнут; после перезагрузки снова подтянутся файлы из папки content.');
         if (!confirmed) return;
 
         Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
+        try {
+            localStorage.removeItem('trainer_texts');
+        } catch (_) {}
         await initStorage();
         initTrainer();
         updateVocabularyCount();
-        showToast('localStorage очищен');
+        showToast('Данные очищены');
         if (managerModal.classList.contains('open')) {
-            texts = loadFromStorage(STORAGE_KEYS.TEXTS, []);
             activeTextId = loadFromStorage(STORAGE_KEYS.ACTIVE_ID, '');
+            managerCollectionId = null;
             renderTextList();
         }
     };
@@ -783,16 +825,20 @@
             return;
         }
 
+        const allTexts = getAllTexts();
+        const activeIdForCollection = loadFromStorage(STORAGE_KEYS.ACTIVE_ID, '');
+        const activeForCollection = allTexts.find((t) => t.id === activeIdForCollection);
+
         const content = srcSentences.map((ru, i) => ({ ru, en: trgSentences[i] }));
         const hash = hashArray(content);
         const newName = (customName || `${srcLang || 'A'} -> ${trgLang || 'B'} (${content.length} предложений)`).trim();
         const newNameKey = normalizeTextName(newName);
         
-        if (texts.some(t => t.hash === hash)) {
+        if (allTexts.some(t => t.hash === hash)) {
             errEl.textContent = 'Такой текст уже сохранен.';
             return;
         }
-        if (texts.some(t => normalizeTextName(t.name) === newNameKey)) {
+        if (allTexts.some(t => normalizeTextName(t.name) === newNameKey)) {
             errEl.textContent = 'Текст с таким названием уже существует.';
             return;
         }
@@ -803,9 +849,12 @@
             content,
             hash
         };
+        if (activeForCollection && activeForCollection.collectionId) {
+            newText.collectionId = activeForCollection.collectionId;
+            newText.collectionHeading = activeForCollection.collectionHeading || activeForCollection.collectionId;
+        }
 
-        texts.push(newText);
-        saveToStorage(STORAGE_KEYS.TEXTS, texts);
+        memoryTexts.push(newText);
         
         document.getElementById('srcText').value = '';
         document.getElementById('trgText').value = '';
@@ -815,114 +864,137 @@
         showToast('Текст успешно добавлен');
     };
 
-    // --- JSON Input ---
-    document.getElementById('saveJson').onclick = () => {
-        const errEl = document.getElementById('jsonError');
-        errEl.textContent = '';
-        
-        try {
-            const data = JSON.parse(document.getElementById('jsonInput').value);
-            if (!Array.isArray(data)) throw new Error('JSON должен быть массивом []');
-            if (data.length === 0) throw new Error('Массив не должен быть пустым');
-            texts = loadFromStorage(STORAGE_KEYS.TEXTS, []);
-            let importedCount = 0;
-            let duplicateCount = 0;
-
-            data.forEach((entry, i) => {
-                if (!entry || typeof entry !== 'object') {
-                    throw new Error(`Элемент ${i + 1} должен быть объектом`);
-                }
-                if (!entry.title || typeof entry.title !== 'string') {
-                    throw new Error(`Элемент ${i + 1}: поле "title" обязательно и должно быть строкой`);
-                }
-                if (!Array.isArray(entry.sentences) || entry.sentences.length === 0) {
-                    throw new Error(`Элемент ${i + 1}: поле "sentences" должно быть непустым массивом`);
-                }
-
-                entry.sentences.forEach((sentence, j) => {
-                    if (!sentence || typeof sentence !== 'object') {
-                        throw new Error(`Элемент ${i + 1}, предложение ${j + 1} должно быть объектом`);
-                    }
-                    if (typeof sentence.ru !== 'string' || typeof sentence.en !== 'string' || !sentence.ru.trim() || !sentence.en.trim()) {
-                        throw new Error(`Элемент ${i + 1}, предложение ${j + 1} должно содержать непустые строки "ru" и "en"`);
-                    }
-                });
-
-                const normalizedContent = entry.sentences.map(sentence => ({
-                    ru: sentence.ru.trim(),
-                    en: sentence.en.trim()
-                }));
-                const normalizedTitle = entry.title.trim();
-                const normalizedTitleKey = normalizeTextName(normalizedTitle);
-                if (!normalizedTitleKey) {
-                    throw new Error(`Элемент ${i + 1}: поле "title" не должно быть пустым`);
-                }
-                if (texts.some(t => normalizeTextName(t.name) === normalizedTitleKey)) {
-                    throw new Error(`Элемент ${i + 1}: текст с названием "${normalizedTitle}" уже существует`);
-                }
-                const hash = hashArray(normalizedContent);
-                if (texts.some(t => t.hash === hash)) {
-                    duplicateCount++;
-                    return;
-                }
-
-                texts.push({
-                    id: 'txt_' + Date.now().toString(36) + '_' + importedCount.toString(36),
-                    name: normalizedTitle,
-                    content: normalizedContent,
-                    hash
-                });
-                importedCount++;
-            });
-
-            if (importedCount === 0 && duplicateCount > 0) {
-                throw new Error('Все тексты из JSON уже существуют.');
-            }
-
-            saveToStorage(STORAGE_KEYS.TEXTS, texts);
-            document.getElementById('jsonInput').value = '';
-            renderTextList();
-            if (duplicateCount > 0) {
-                showToast(`Импортировано: ${importedCount}. Пропущено дублей: ${duplicateCount}`);
-            } else {
-                showToast(`Импортировано текстов: ${importedCount}`);
-            }
-        } catch (err) {
-            errEl.textContent = '❌ ' + err.message;
-        }
-    };
-
-    document.getElementById('exportJson').onclick = () => {
-        const exportData = loadFromStorage(STORAGE_KEYS.TEXTS, []).map(text => ({
+    function textToExportItem(text) {
+        return {
             title: text.name,
-            sentences: (text.content || []).map(sentence => ({
+            sentences: (text.content || []).map((sentence) => ({
                 ru: sentence.ru,
                 en: sentence.en
             }))
-        }));
+        };
+    }
 
-        if (!exportData.length) {
-            showToast('Нет текстов для экспорта');
-            return;
+    function rawEntriesToExportItems(entries) {
+        if (!Array.isArray(entries)) return [];
+        return entries
+            .map((entry) => {
+                const title = typeof entry?.title === 'string' ? entry.title.trim() : '';
+                const sentences = Array.isArray(entry?.sentences)
+                    ? entry.sentences
+                        .filter((item) => typeof item?.ru === 'string' && typeof item?.en === 'string')
+                        .map((item) => ({ ru: item.ru.trim(), en: item.en.trim() }))
+                        .filter((s) => s.ru && s.en)
+                    : [];
+                if (!title || !sentences.length) return null;
+                return { title, sentences };
+            })
+            .filter(Boolean);
+    }
+
+    async function loadRawCollectionFileForExport(collectionId) {
+        const file = contentCollectionFiles.get(collectionId);
+        if (!file) return { heading: '', items: [] };
+        try {
+            const res = await fetch(`./content/${encodeURIComponent(file)}`, { cache: 'no-store' });
+            if (!res.ok) return { heading: '', items: [] };
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                return {
+                    heading: file.replace(/\.json$/i, '') || '',
+                    items: rawEntriesToExportItems(data)
+                };
+            }
+            if (data && typeof data === 'object' && Array.isArray(data.items)) {
+                const h = typeof data.heading === 'string' ? data.heading.trim() : '';
+                return {
+                    heading: h || file.replace(/\.json$/i, '') || '',
+                    items: rawEntriesToExportItems(data.items)
+                };
+            }
+        } catch (_) {}
+        return { heading: '', items: [] };
+    }
+
+    document.getElementById('exportJson').onclick = async () => {
+        try {
+            const allTexts = getAllTexts();
+            const activeId = loadFromStorage(STORAGE_KEYS.ACTIVE_ID, '');
+            const activeText = allTexts.find((t) => t.id === activeId) || allTexts[0];
+            if (!activeText) {
+                showToast('Нет текстов для экспорта');
+                return;
+            }
+            const collKey = activeText.collectionId ?? '__manual__';
+            const inCollection = allTexts.filter((t) => (t.collectionId ?? '__manual__') === collKey);
+            if (!inCollection.length) {
+                showToast('Нет текстов для экспорта');
+                return;
+            }
+
+            let heading;
+            let items;
+            if (collKey.startsWith('content_')) {
+                const raw = await loadRawCollectionFileForExport(collKey);
+                heading = raw.heading || activeText.collectionHeading || collKey;
+                const memoryItems = memoryTexts
+                    .filter((t) => (t.collectionId ?? '__manual__') === collKey)
+                    .map(textToExportItem);
+                items = [...raw.items, ...memoryItems];
+            } else {
+                heading = collKey === '__manual__'
+                    ? 'Добавлено вручную'
+                    : (activeText.collectionHeading || activeText.collectionId || 'Экспорт');
+                items = inCollection.map(textToExportItem);
+            }
+
+            const exportData = { heading, items };
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const now = new Date();
+            const datePart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            link.href = url;
+            link.download = `trainer-collection-${datePart}.json`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            showToast('Экспорт завершен');
+        } catch (_) {
+            showToast('Ошибка экспорта');
         }
-
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        const now = new Date();
-        const datePart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-        link.href = url;
-        link.download = `trainer-texts-${datePart}.json`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
-        showToast('Экспорт завершен');
     };
 
+    function buildTextGroups(textsList) {
+        const orderFirst = new Map();
+        textsList.forEach((t, i) => {
+            const cid = t.collectionId ?? '__manual__';
+            if (!orderFirst.has(cid)) orderFirst.set(cid, i);
+        });
+        const byId = new Map();
+        for (const t of textsList) {
+            const cid = t.collectionId ?? '__manual__';
+            if (!byId.has(cid)) {
+                byId.set(cid, {
+                    collectionId: cid,
+                    collectionHeading: t.collectionHeading || '',
+                    texts: []
+                });
+            }
+            byId.get(cid).texts.push(t);
+        }
+        return Array.from(byId.values()).sort((a, b) =>
+            (orderFirst.get(a.collectionId) ?? 0) - (orderFirst.get(b.collectionId) ?? 0)
+        );
+    }
+
+    function collectionLabel(group) {
+        if (group.collectionId === '__manual__') return 'Добавлено вручную';
+        return group.collectionHeading || 'Без названия';
+    }
+
     function renderTextList() {
-        // Всегда берем свежие данные
-        texts = loadFromStorage(STORAGE_KEYS.TEXTS, []);
+        const texts = getAllTexts();
         const migrationResult = migrateProgressToTextNames(texts, loadFromStorage(STORAGE_KEYS.PROGRESS, {}));
         const progress = migrationResult.progress;
         if (migrationResult.changed) {
@@ -930,10 +1002,68 @@
         }
         textListEl.innerHTML = '';
         if (texts.length === 0) {
-            textListEl.innerHTML = '<p style="text-align:center; color:var(--text-muted)">Нет сохранённых текстов</p>';
+            textListEl.innerHTML = '<p style="text-align:center; color:var(--text-muted)">Нет текстов (проверьте manifest и папку content)</p>';
             return;
         }
-        texts.forEach((t, index) => {
+
+        const groups = buildTextGroups(texts);
+        const multiCollection = groups.length > 1;
+
+        if (multiCollection && managerCollectionId === null) {
+            groups.forEach((g, index) => {
+                const label = collectionLabel(g);
+                const div = document.createElement('div');
+                div.className = 'collection-item';
+                div.innerHTML = `
+                    <div class="text-info">
+                        <h3>${index + 1}. ${escapeHtml(label)}</h3>
+                        <p>${ruTextCountLabel(g.texts.length)}</p>
+                    </div>
+                    <div class="text-actions">
+                        <button type="button" class="btn btn-sm btn-primary open-collection-btn" data-collection-id="${g.collectionId}">Открыть</button>
+                    </div>
+                `;
+                textListEl.appendChild(div);
+            });
+            textListEl.querySelectorAll('.open-collection-btn').forEach((btn) => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    managerCollectionId = btn.getAttribute('data-collection-id');
+                    renderTextList();
+                };
+            });
+            return;
+        }
+
+        let activeGroup;
+        if (!multiCollection) {
+            activeGroup = groups[0];
+        } else {
+            activeGroup = groups.find((g) => g.collectionId === managerCollectionId);
+            if (!activeGroup) {
+                managerCollectionId = null;
+                renderTextList();
+                return;
+            }
+        }
+
+        if (multiCollection) {
+            const nav = document.createElement('div');
+            nav.className = 'manager-nav';
+            const backBtn = document.createElement('button');
+            backBtn.type = 'button';
+            backBtn.className = 'btn btn-sm btn-secondary';
+            backBtn.id = 'managerBackBtn';
+            backBtn.textContent = '← Коллекции';
+            backBtn.onclick = () => {
+                managerCollectionId = null;
+                renderTextList();
+            };
+            nav.appendChild(backBtn);
+            textListEl.appendChild(nav);
+        }
+
+        activeGroup.texts.forEach((t, index) => {
             const total = t.content.length;
             const current = Math.min(progress[getProgressKey(t)]?.currentIndex ?? 0, total);
             const percent = total > 0 ? Math.round((current / total) * 100) : 0;
@@ -941,12 +1071,12 @@
             div.className = `text-item ${t.id === activeTextId ? 'active' : ''}`;
             div.innerHTML = `
                 <div class="text-info">
-                    <h3>${index + 1}. ${t.name}</h3>
+                    <h3>${index + 1}. ${escapeHtml(t.name)}</h3>
                     <p>${total} предложений • Прогресс: ${current}/${total} (${percent}%)</p>
                 </div>
                 <div class="text-actions">
-                    <button class="btn btn-sm btn-primary load-text-btn" data-id="${t.id}">Загрузить</button>
-                    ${!t.id.startsWith('default_') ? `<button class="btn btn-sm btn-danger delete-text-btn" data-id="${t.id}">Удалить</button>` : ''}
+                    <button type="button" class="btn btn-sm btn-primary load-text-btn" data-id="${t.id}">Загрузить</button>
+                    ${!t.id.startsWith('default_') ? `<button type="button" class="btn btn-sm btn-danger delete-text-btn" data-id="${t.id}">Удалить</button>` : ''}
                 </div>
             `;
             textListEl.appendChild(div);
@@ -972,18 +1102,23 @@
     }
 
     function deleteText(id) {
-        const removedText = texts.find(t => t.id === id);
-        texts = texts.filter(t => t.id !== id);
-        saveToStorage(STORAGE_KEYS.TEXTS, texts);
+        if (String(id).startsWith('default_')) return;
+        const removedText = memoryTexts.find(t => t.id === id);
+        if (!removedText) return;
+        memoryTexts = memoryTexts.filter(t => t.id !== id);
         const progress = loadFromStorage(STORAGE_KEYS.PROGRESS, {});
-        if (removedText) {
-            delete progress[getProgressKey(removedText)];
-        }
+        delete progress[getProgressKey(removedText)];
         saveToStorage(STORAGE_KEYS.PROGRESS, progress);
         
         if (activeTextId === id) {
-            const fallback = texts.length > 0 ? texts[0].id : 'default_001';
-            selectText(fallback);
+            const rest = getAllTexts();
+            if (rest.length > 0) {
+                selectText(rest[0].id);
+            } else {
+                saveToStorage(STORAGE_KEYS.ACTIVE_ID, '');
+                activeTextId = '';
+                initTrainer();
+            }
         }
         renderTextList();
     }
@@ -1007,7 +1142,9 @@
     const isMobile = window.matchMedia('(max-width: 768px)');
 
     function resolveTrainingMode(mode) {
-        return mode === 'hard' ? 'hard' : 'normal';
+        if (mode === 'hard') return 'hard';
+        if (mode === 'easy' || mode === 'legion') return 'easy';
+        return 'normal';
     }
 
     function normalize(str) {
@@ -1047,12 +1184,12 @@
     }
 
     function initTrainer() {
-        texts = loadFromStorage(STORAGE_KEYS.TEXTS, []);
-        activeTextId = loadFromStorage(STORAGE_KEYS.ACTIVE_ID, 'default_001');
+        const texts = getAllTexts();
+        activeTextId = loadFromStorage(STORAGE_KEYS.ACTIVE_ID, '');
         const activeText = texts.find(t => t.id === activeTextId) || texts[0];
         
         if (!activeText) {
-            alert('Ошибка: текст не найден. Попробуйте добавить новый.');
+            alert('Ошибка: нет текстов. Добавьте файлы в content/manifest или вставьте текст.');
             return;
         }
 
@@ -1126,7 +1263,7 @@
     }
 
     function saveProgress() {
-        const activeText = texts.find(t => t.id === activeTextId);
+        const activeText = getAllTexts().find(t => t.id === activeTextId);
         if (!activeText) return;
         const prog = loadFromStorage(STORAGE_KEYS.PROGRESS, {});
         prog[getProgressKey(activeText)] = { currentIndex, furthestIndex: furthestIndexReached };
@@ -1169,7 +1306,7 @@
     function handleGotIt() {
         if (trainingMode === 'hard') {
             currentIndex = 0;
-        } else {
+        } else if (trainingMode !== 'easy') {
             currentIndex = Math.max(0, currentIndex - 1);
         }
         saveProgress();
