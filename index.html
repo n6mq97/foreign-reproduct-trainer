@@ -23,6 +23,7 @@
             --shadow: 0 4px 20px rgba(0,0,0,0.06);
             --radius: 12px;
             --mobile-keyboard-offset: 0px;
+            --mobile-input-zone-height: 280px;
         }
 
         * { box-sizing: border-box; }
@@ -311,12 +312,17 @@
                 margin: 0;
             }
             .trainer-main {
-                padding-bottom: 180px;
+                padding-bottom: calc(var(--mobile-input-zone-height) + 24px);
             }
             .translation-panel {
-                padding-left: 12px;
-                padding-right: max(12px, env(safe-area-inset-right));
+                padding-left: 16px;
+                padding-right: max(16px, env(safe-area-inset-right));
                 padding-top: 16px;
+            }
+            #enList {
+                padding-bottom: 28px;
+                padding-left: 2px;
+                padding-right: 2px;
             }
             .input-zone {
                 position: fixed;
@@ -826,6 +832,7 @@
     let trainingMode = loadFromStorage(STORAGE_KEYS.MODE, 'normal');
 
     const enList = document.getElementById('enList');
+    const inputZone = document.querySelector('.input-zone');
     const currentTask = document.getElementById('currentTask');
     const positionBadge = document.getElementById('positionBadge');
     const sourceText = document.getElementById('sourceText');
@@ -854,6 +861,23 @@
         userInput.style.height = `${Math.max(nextHeight, 52)}px`;
     }
 
+    function syncMobileInputZoneInset() {
+        if (!inputZone || !isMobile.matches) return;
+        document.documentElement.style.setProperty('--mobile-input-zone-height', `${inputZone.offsetHeight}px`);
+    }
+
+    function scrollEnListToBottomIfInputFocused() {
+        if (!isMobile.matches) return;
+        if (document.activeElement !== userInput) return;
+        const run = () => {
+            enList.scrollTop = enList.scrollHeight;
+        };
+        requestAnimationFrame(() => {
+            run();
+            requestAnimationFrame(run);
+        });
+    }
+
     function syncMobileKeyboardOffset() {
         if (!isMobile.matches) {
             document.documentElement.style.setProperty('--mobile-keyboard-offset', '0px');
@@ -862,17 +886,12 @@
         const viewport = window.visualViewport;
         if (!viewport) {
             document.documentElement.style.setProperty('--mobile-keyboard-offset', '0px');
+            scrollEnListToBottomIfInputFocused();
             return;
         }
         const keyboardOffset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
         document.documentElement.style.setProperty('--mobile-keyboard-offset', `${keyboardOffset}px`);
-    }
-
-    function scrollToActiveSentenceOnMobileKeyboard() {
-        if (!isMobile.matches) return;
-        if (!currentTask.classList.contains('hidden')) {
-            currentTask.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
+        scrollEnListToBottomIfInputFocused();
     }
 
     function initTrainer() {
@@ -1034,7 +1053,10 @@
     });
     userInput.addEventListener('input', resizeUserInput);
     if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', syncMobileKeyboardOffset);
+        window.visualViewport.addEventListener('resize', () => {
+            syncMobileKeyboardOffset();
+            syncMobileInputZoneInset();
+        });
         window.visualViewport.addEventListener('scroll', syncMobileKeyboardOffset);
     }
     trainingMode = resolveTrainingMode(trainingMode);
@@ -1043,11 +1065,22 @@
         trainingMode = resolveTrainingMode(trainingModeEl.value);
         saveToStorage(STORAGE_KEYS.MODE, trainingMode);
     });
-    window.addEventListener('resize', syncMobileKeyboardOffset);
+    window.addEventListener('resize', () => {
+        syncMobileKeyboardOffset();
+        syncMobileInputZoneInset();
+    });
+    if (inputZone && window.ResizeObserver) {
+        new ResizeObserver(() => {
+            syncMobileInputZoneInset();
+            scrollEnListToBottomIfInputFocused();
+        }).observe(inputZone);
+    }
     userInput.addEventListener('focus', () => {
         syncMobileKeyboardOffset();
-        setTimeout(scrollToActiveSentenceOnMobileKeyboard, 80);
-        setTimeout(scrollToActiveSentenceOnMobileKeyboard, 260);
+        syncMobileInputZoneInset();
+        setTimeout(scrollEnListToBottomIfInputFocused, 60);
+        setTimeout(scrollEnListToBottomIfInputFocused, 200);
+        setTimeout(scrollEnListToBottomIfInputFocused, 450);
     });
     userInput.addEventListener('blur', () => {
         setTimeout(syncMobileKeyboardOffset, 120);
@@ -1059,7 +1092,12 @@
         updateVocabularyCount();
         initTrainer();
         syncMobileKeyboardOffset();
+        syncMobileInputZoneInset();
         resizeUserInput();
+        requestAnimationFrame(() => {
+            syncMobileInputZoneInset();
+            scrollEnListToBottomIfInputFocused();
+        });
     }
 
     bootstrap();
