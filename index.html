@@ -214,29 +214,17 @@
         .feedback.success { background: var(--success-bg); color: #155724; }
         .hint { font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; text-align: center; }
 
-        .precheck-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+        .plus3-hint {
             margin-bottom: 12px;
-        }
-        .precheck-line {
             padding: 10px 12px;
             border-radius: 8px;
             font-size: 0.95rem;
             line-height: 1.45;
-            min-height: 2.8em;
+            background: var(--active-bg);
+            border: 1px solid var(--active-border);
+            color: var(--text);
         }
-        .precheck-hit {
-            background: var(--success-bg);
-            color: #1b5e20;
-            border: 1px solid var(--success-border);
-        }
-        .precheck-miss {
-            background: var(--error-bg);
-            color: var(--error-text);
-            border: 1px solid #ffcdd2;
-        }
+
         #enList {
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
@@ -407,6 +395,19 @@
                 padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
                 transform: translateY(calc(-1 * var(--mobile-keyboard-offset)));
             }
+            .input-zone .controls {
+                display: flex;
+                flex-wrap: nowrap;
+                gap: 8px;
+                width: 100%;
+                align-items: stretch;
+            }
+            .input-zone .controls .btn {
+                flex: 1 1 0;
+                min-width: 0;
+                padding: 10px 12px;
+                font-size: 0.9rem;
+            }
             .input-zone .hint { display: none; }
             .modal-content { width: 95%; }
             #userInput {
@@ -439,14 +440,11 @@
     </div>
 
     <div class="input-zone">
-        <div id="precheckPanel" class="precheck-panel hidden" aria-live="polite">
-            <div id="precheckHitLine" class="precheck-line precheck-hit"></div>
-            <div id="precheckMissLine" class="precheck-line precheck-miss"></div>
-        </div>
+        <div id="plus3Hint" class="plus3-hint hidden" aria-live="polite"></div>
         <textarea id="userInput" rows="1" placeholder="Введите перевод выделенного предложения..." autocomplete="off"></textarea>
         <div class="controls">
             <button id="checkBtn" class="btn btn-primary">Проверить</button>
-            <button id="precheckBtn" type="button" class="btn btn-secondary">Препроверка</button>
+            <button id="plus3Btn" type="button" class="btn btn-secondary">+3</button>
             <button id="gotItBtn" class="btn btn-warning hidden">Понял</button>
         </div>
         <div id="feedback" class="feedback hidden"></div>
@@ -900,10 +898,8 @@
     const enList = document.getElementById('enList');
     const userInput = document.getElementById('userInput');
     const checkBtn = document.getElementById('checkBtn');
-    const precheckBtn = document.getElementById('precheckBtn');
-    const precheckPanel = document.getElementById('precheckPanel');
-    const precheckHitLine = document.getElementById('precheckHitLine');
-    const precheckMissLine = document.getElementById('precheckMissLine');
+    const plus3Btn = document.getElementById('plus3Btn');
+    const plus3Hint = document.getElementById('plus3Hint');
     const gotItBtn = document.getElementById('gotItBtn');
     const feedback = document.getElementById('feedback');
     const trainingModeEl = document.getElementById('trainingMode');
@@ -921,50 +917,26 @@
             .replace(/[^\p{L}]+/gu, '');
     }
 
-    function extractWords(str) {
-        const m = String(str ?? '').toLowerCase().match(/\p{L}+/gu);
-        return m || [];
+    function hidePlus3Hint() {
+        plus3Hint.classList.add('hidden');
+        plus3Hint.textContent = '';
     }
 
-    function shuffle(a) {
-        for (let i = a.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [a[i], a[j]] = [a[j], a[i]];
+    function runPlus3() {
+        if (isFinished || isWaitingForGotIt) return;
+        const refWords = extractWords(currentContent[currentIndex].en);
+        const userWords = extractWords(userInput.value);
+        let i = 0;
+        while (i < userWords.length && i < refWords.length && userWords[i] === refWords[i]) {
+            i++;
         }
-        return a;
-    }
-
-    function hidePrecheck() {
-        precheckPanel.classList.add('hidden');
-        precheckHitLine.textContent = '';
-        precheckMissLine.textContent = '';
-    }
-
-    function runPrecheck() {
-        if (isFinished || isWaitingForGotIt || !userInput.value.trim()) return;
-        userInput.blur();
-        const inpTokens = extractWords(userInput.value);
-        const refTokens = extractWords(currentContent[currentIndex].en);
-        const inpSet = new Set(inpTokens);
-        const hits = [];
-        const seenHit = new Set();
-        for (const w of refTokens) {
-            if (inpSet.has(w) && !seenHit.has(w)) {
-                seenHit.add(w);
-                hits.push(w);
-            }
+        const next = refWords.slice(i, i + 3);
+        if (!next.length) {
+            hidePlus3Hint();
+            return;
         }
-        const misses = [];
-        const seenMiss = new Set();
-        for (const w of refTokens) {
-            if (!inpSet.has(w) && !seenMiss.has(w)) {
-                seenMiss.add(w);
-                misses.push(w);
-            }
-        }
-        precheckHitLine.textContent = shuffle([...hits]).join(' ');
-        precheckMissLine.textContent = shuffle([...misses]).join(' ');
-        precheckPanel.classList.remove('hidden');
+        plus3Hint.textContent = next.join(' ');
+        plus3Hint.classList.remove('hidden');
     }
 
     function resizeUserInput() {
@@ -1036,9 +1008,9 @@
         userInput.value = '';
         resizeUserInput();
         feedback.className = 'feedback hidden';
-        hidePrecheck();
+        hidePlus3Hint();
         checkBtn.classList.remove('hidden');
-        precheckBtn.classList.remove('hidden');
+        plus3Btn.classList.remove('hidden');
         gotItBtn.classList.add('hidden');
     }
 
@@ -1088,7 +1060,7 @@
     function checkAnswer() {
         if (isFinished || isWaitingForGotIt || !userInput.value.trim()) return;
 
-        hidePrecheck();
+        hidePlus3Hint();
 
         const userVal = normalize(userInput.value);
         const targetVal = normalize(currentContent[currentIndex].en);
@@ -1114,7 +1086,7 @@
             isWaitingForGotIt = true;
             userInput.disabled = true;
             checkBtn.classList.add('hidden');
-            precheckBtn.classList.add('hidden');
+            plus3Btn.classList.add('hidden');
             gotItBtn.classList.remove('hidden');
             feedback.className = 'feedback error';
             feedback.innerHTML = `❌ Ошибка. Правильно:<br><strong>${currentContent[currentIndex].en}</strong>`;
@@ -1133,7 +1105,7 @@
         userInput.disabled = false;
         gotItBtn.classList.add('hidden');
         checkBtn.classList.remove('hidden');
-        precheckBtn.classList.remove('hidden');
+        plus3Btn.classList.remove('hidden');
         feedback.classList.add('hidden');
         
         renderEN(); // Перерисовка справа (удаляет верхнее)
@@ -1147,8 +1119,8 @@
         isFinished = true;
         userInput.style.display = 'none';
         checkBtn.classList.add('hidden');
-        precheckBtn.classList.add('hidden');
-        hidePrecheck();
+        plus3Btn.classList.add('hidden');
+        hidePlus3Hint();
         document.querySelectorAll('.ru-sentence').forEach(el => el.classList.remove('active'));
         feedback.className = 'feedback success';
         feedback.textContent = '🎉 Поздравляем! Весь текст успешно переведен.';
@@ -1164,7 +1136,7 @@
     };
 
     checkBtn.addEventListener('click', checkAnswer);
-    precheckBtn.addEventListener('click', runPrecheck);
+    plus3Btn.addEventListener('click', runPlus3);
     gotItBtn.addEventListener('click', handleGotIt);
     userInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -1185,7 +1157,7 @@
     });
     window.addEventListener('resize', syncMobileKeyboardOffset);
     userInput.addEventListener('focus', () => {
-        hidePrecheck();
+        hidePlus3Hint();
         syncMobileKeyboardOffset();
         setTimeout(scrollToActiveSentenceOnMobileKeyboard, 80);
         setTimeout(scrollToActiveSentenceOnMobileKeyboard, 260);
