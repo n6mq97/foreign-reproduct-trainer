@@ -174,15 +174,24 @@
             flex-shrink: 0;
         }
 
-        #userInput {
+        .composer-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
             width: 100%;
-            padding: 14px;
+        }
+
+        #userInput {
+            flex: 1;
+            min-width: 0;
+            width: 100%;
+            padding: 11px 14px;
             font-size: 1.05rem;
             border: 2px solid #e0e4e8;
-            border-radius: 8px;
+            border-radius: 20px;
             transition: border-color 0.2s;
-            margin-bottom: 12px;
-            min-height: 52px;
+            margin-bottom: 0;
+            min-height: 44px;
             max-height: 180px;
             resize: none;
             overflow-y: auto;
@@ -192,17 +201,52 @@
         #userInput:focus { outline: none; border-color: var(--accent); }
         input:disabled, textarea:disabled { background: #f1f3f5; color: #a0a5aa; cursor: not-allowed; }
 
-        .controls {
+        .composer-actions {
+            flex-shrink: 0;
             display: flex;
-            gap: 12px;
-            align-items: center;
-            flex-wrap: wrap;
+            align-items: flex-end;
+            align-self: flex-end;
         }
+
+        .btn-composer {
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            border: none;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s, opacity 0.2s;
+        }
+        .btn-composer:active { transform: scale(0.96); }
+        .btn-composer:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-composer svg {
+            width: 22px;
+            height: 22px;
+            fill: currentColor;
+            display: block;
+        }
+        .btn-composer-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+        .btn-composer-primary:hover { background: var(--accent-hover); }
+        .btn-composer-warn {
+            background: #ff9800;
+            color: #fff;
+        }
+        .btn-composer-warn:hover { background: #f57c00; }
 
         .hidden { display: none !important; }
 
         .feedback {
-            margin-top: 10px;
+            margin-top: 12px;
             padding: 10px;
             border-radius: 8px;
             text-align: center;
@@ -282,15 +326,25 @@
 
         @media (max-width: 768px) {
             html {
-                height: 100%;
-                overflow: hidden;
-            }
-            body {
-                padding: 0;
+                position: fixed;
+                left: 0;
+                right: 0;
+                top: 0;
+                width: 100%;
                 height: var(--app-visible-height);
                 max-height: var(--app-visible-height);
                 overflow: hidden;
+                overscroll-behavior: none;
+            }
+            body {
+                padding: 0;
+                height: 100%;
+                max-height: 100%;
+                min-height: 0;
+                overflow: hidden;
+                overscroll-behavior: none;
                 box-sizing: border-box;
+                touch-action: manipulation;
             }
             .app-header {
                 display: flex;
@@ -344,6 +398,7 @@
                 padding-bottom: 28px;
                 padding-left: 2px;
                 padding-right: 2px;
+                overscroll-behavior: contain;
             }
             .input-zone {
                 position: fixed;
@@ -367,23 +422,23 @@
                 font-size: 0.98rem;
                 line-height: 1.45;
             }
-            .input-zone .controls {
-                display: flex;
-                flex-wrap: nowrap;
+            .input-zone .composer-row {
                 gap: 8px;
-                width: 100%;
-                align-items: stretch;
             }
-            .input-zone .controls .btn {
-                flex: 1 1 0;
-                min-width: 0;
-                padding: 10px 12px;
-                font-size: 0.9rem;
+            .input-zone .btn-composer {
+                width: 42px;
+                height: 42px;
+            }
+            .input-zone .btn-composer svg {
+                width: 21px;
+                height: 21px;
             }
             .input-zone .hint { display: none; }
             .modal-content { width: 95%; }
             #userInput {
                 max-height: 140px;
+                border-radius: 18px;
+                padding: 10px 12px;
             }
         }
     </style>
@@ -411,10 +466,16 @@
             <div class="position-badge" id="positionBadge"></div>
             <div class="source-text" id="sourceText"></div>
         </div>
-        <textarea id="userInput" rows="1" placeholder="Введите перевод..." autocomplete="off"></textarea>
-        <div class="controls">
-            <button id="checkBtn" class="btn btn-primary">Проверить</button>
-            <button id="gotItBtn" class="btn btn-warning hidden">Понял</button>
+        <div class="composer-row">
+            <textarea id="userInput" rows="1" placeholder="Введите перевод..." autocomplete="off"></textarea>
+            <div class="composer-actions">
+                <button type="button" id="checkBtn" class="btn-composer btn-composer-primary" aria-label="Проверить">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.59 5.58L20 12l-8-8-8 8z"/></svg>
+                </button>
+                <button type="button" id="gotItBtn" class="btn-composer btn-composer-warn hidden" aria-label="Понял">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+                </button>
+            </div>
         </div>
         <div id="feedback" class="feedback hidden"></div>
         <div class="hint">Нажмите Enter для проверки</div>
@@ -890,7 +951,15 @@
     function resizeUserInput() {
         userInput.style.height = 'auto';
         const nextHeight = Math.min(userInput.scrollHeight, isMobile.matches ? 140 : 180);
-        userInput.style.height = `${Math.max(nextHeight, 52)}px`;
+        userInput.style.height = `${Math.max(nextHeight, 44)}px`;
+    }
+
+    function lockMobilePageScroll() {
+        if (!isMobile.matches) return;
+        const root = document.scrollingElement || document.documentElement;
+        window.scrollTo(0, 0);
+        root.scrollTop = 0;
+        document.body.scrollTop = 0;
     }
 
     function applyMobileVisualViewportHeight() {
@@ -901,6 +970,7 @@
         const vv = window.visualViewport;
         const h = vv ? Math.max(1, Math.round(vv.height)) : window.innerHeight;
         document.documentElement.style.setProperty('--app-visible-height', `${h}px`);
+        lockMobilePageScroll();
     }
 
     function syncMobileInputZoneInset() {
