@@ -24,6 +24,7 @@
             --radius: 12px;
             --mobile-keyboard-offset: 0px;
             --mobile-input-zone-height: 280px;
+            --app-visible-height: 100dvh;
         }
 
         * { box-sizing: border-box; }
@@ -271,9 +272,16 @@
         .toast.show { opacity: 1; transform: translateY(0); }
 
         @media (max-width: 768px) {
+            html {
+                height: 100%;
+                overflow: hidden;
+            }
             body {
                 padding: 0;
-                height: 100dvh;
+                height: var(--app-visible-height);
+                max-height: var(--app-visible-height);
+                overflow: hidden;
+                box-sizing: border-box;
             }
             .app-header {
                 display: flex;
@@ -284,6 +292,7 @@
                 padding: 12px 14px;
                 background: var(--panel);
                 border-bottom: 1px solid var(--border);
+                flex-shrink: 0;
             }
             .header-actions {
                 display: grid;
@@ -310,6 +319,9 @@
                 border-radius: 0;
                 box-shadow: none;
                 margin: 0;
+                flex: 1;
+                min-height: 0;
+                overflow: hidden;
             }
             .trainer-main {
                 padding-bottom: calc(var(--mobile-input-zone-height) + 24px);
@@ -861,6 +873,16 @@
         userInput.style.height = `${Math.max(nextHeight, 52)}px`;
     }
 
+    function applyMobileVisualViewportHeight() {
+        if (!isMobile.matches) {
+            document.documentElement.style.removeProperty('--app-visible-height');
+            return;
+        }
+        const vv = window.visualViewport;
+        const h = vv ? Math.max(1, Math.round(vv.height)) : window.innerHeight;
+        document.documentElement.style.setProperty('--app-visible-height', `${h}px`);
+    }
+
     function syncMobileInputZoneInset() {
         if (!inputZone || !isMobile.matches) return;
         document.documentElement.style.setProperty('--mobile-input-zone-height', `${inputZone.offsetHeight}px`);
@@ -872,26 +894,40 @@
         const run = () => {
             enList.scrollTop = enList.scrollHeight;
         };
+        run();
         requestAnimationFrame(() => {
             run();
-            requestAnimationFrame(run);
+            requestAnimationFrame(() => {
+                run();
+            });
+        });
+    }
+
+    function scheduleScrollListAfterMobileLayout() {
+        if (!isMobile.matches) return;
+        if (document.activeElement !== userInput) return;
+        const delays = [0, 32, 100, 220, 400, 600];
+        delays.forEach((ms) => {
+            setTimeout(() => scrollEnListToBottomIfInputFocused(), ms);
         });
     }
 
     function syncMobileKeyboardOffset() {
         if (!isMobile.matches) {
             document.documentElement.style.setProperty('--mobile-keyboard-offset', '0px');
+            document.documentElement.style.removeProperty('--app-visible-height');
             return;
         }
+        applyMobileVisualViewportHeight();
         const viewport = window.visualViewport;
         if (!viewport) {
             document.documentElement.style.setProperty('--mobile-keyboard-offset', '0px');
-            scrollEnListToBottomIfInputFocused();
+            scheduleScrollListAfterMobileLayout();
             return;
         }
         const keyboardOffset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
         document.documentElement.style.setProperty('--mobile-keyboard-offset', `${keyboardOffset}px`);
-        scrollEnListToBottomIfInputFocused();
+        scheduleScrollListAfterMobileLayout();
     }
 
     function initTrainer() {
@@ -1057,7 +1093,10 @@
             syncMobileKeyboardOffset();
             syncMobileInputZoneInset();
         });
-        window.visualViewport.addEventListener('scroll', syncMobileKeyboardOffset);
+        window.visualViewport.addEventListener('scroll', () => {
+            syncMobileKeyboardOffset();
+            syncMobileInputZoneInset();
+        });
     }
     trainingMode = resolveTrainingMode(trainingMode);
     trainingModeEl.value = trainingMode;
@@ -1069,18 +1108,23 @@
         syncMobileKeyboardOffset();
         syncMobileInputZoneInset();
     });
+    window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+            syncMobileKeyboardOffset();
+            syncMobileInputZoneInset();
+        }, 300);
+    });
     if (inputZone && window.ResizeObserver) {
         new ResizeObserver(() => {
+            applyMobileVisualViewportHeight();
             syncMobileInputZoneInset();
-            scrollEnListToBottomIfInputFocused();
+            scheduleScrollListAfterMobileLayout();
         }).observe(inputZone);
     }
     userInput.addEventListener('focus', () => {
         syncMobileKeyboardOffset();
         syncMobileInputZoneInset();
-        setTimeout(scrollEnListToBottomIfInputFocused, 60);
-        setTimeout(scrollEnListToBottomIfInputFocused, 200);
-        setTimeout(scrollEnListToBottomIfInputFocused, 450);
+        scheduleScrollListAfterMobileLayout();
     });
     userInput.addEventListener('blur', () => {
         setTimeout(syncMobileKeyboardOffset, 120);
@@ -1095,8 +1139,9 @@
         syncMobileInputZoneInset();
         resizeUserInput();
         requestAnimationFrame(() => {
+            applyMobileVisualViewportHeight();
             syncMobileInputZoneInset();
-            scrollEnListToBottomIfInputFocused();
+            scheduleScrollListAfterMobileLayout();
         });
     }
 
