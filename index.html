@@ -195,8 +195,15 @@
             max-height: 180px;
             resize: none;
             overflow-y: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
             line-height: 1.4;
             font-family: inherit;
+        }
+        #userInput::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
         }
         #userInput:focus { outline: none; border-color: var(--accent); }
         input:disabled, textarea:disabled { background: #f1f3f5; color: #a0a5aa; cursor: not-allowed; }
