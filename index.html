@@ -932,6 +932,29 @@
         });
     }
 
+    function focusInputForTranslation() {
+        if (!isMobile.matches) return;
+        if (isFinished || isWaitingForGotIt) return;
+        if (userInput.disabled) return;
+        if (!currentContent.length || currentIndex >= currentContent.length) return;
+        if (userInput.style.display === 'none') return;
+        const go = () => {
+            try {
+                userInput.focus({ preventScroll: true });
+            } catch {
+                userInput.focus();
+            }
+            syncMobileKeyboardOffset();
+            syncMobileInputZoneInset();
+            scheduleScrollListAfterMobileLayout();
+        };
+        requestAnimationFrame(() => {
+            go();
+            setTimeout(go, 80);
+            setTimeout(go, 250);
+        });
+    }
+
     function syncMobileKeyboardOffset() {
         if (!isMobile.matches) {
             document.documentElement.style.setProperty('--mobile-keyboard-offset', '0px');
@@ -990,6 +1013,7 @@
         feedback.className = 'feedback hidden';
         checkBtn.classList.remove('hidden');
         gotItBtn.classList.add('hidden');
+        focusInputForTranslation();
     }
 
     function updateCurrentTask() {
@@ -1049,6 +1073,7 @@
                 userInput.value = '';
                 resizeUserInput();
                 updateCurrentTask();
+                focusInputForTranslation();
             }
         } else {
             isWaitingForGotIt = true;
@@ -1078,7 +1103,10 @@
         userInput.value = '';
         resizeUserInput();
         updateCurrentTask();
-        userInput.focus();
+        focusInputForTranslation();
+        if (!isMobile.matches) {
+            userInput.focus();
+        }
     }
 
     function finishTrainer() {
