@@ -3,7 +3,7 @@ const STORAGE_KEYS = {
     ACTIVE_ID: 'trainer_active_id',
     MODE: 'trainer_mode',
     VOCABULARY: 'trainer_vocabulary',
-    RECORDED_WORD: 'trainer_recorded_word'
+    RECORDED_WORDS: 'trainer_recorded_words'
 };
 
 let fileTexts = [];
@@ -395,8 +395,6 @@ let furthestIndexReached = 0;
 let isWaitingForGotIt = false;
 let isFinished = false;
 let trainingMode = loadFromStorage(STORAGE_KEYS.MODE, 'normal');
-let recordedWord = '';
-
 const enList = document.getElementById('enList');
 const inputZone = document.querySelector('.input-zone');
 const currentTask = document.getElementById('currentTask');
@@ -426,20 +424,60 @@ function splitAnswerIntoWords(text) {
     return String(text || '').trim().split(/\s+/).filter(Boolean);
 }
 
-function persistRecordedWord() {
-    saveToStorage(STORAGE_KEYS.RECORDED_WORD, recordedWord);
+function loadRecordedWordsStore() {
+    const raw = loadFromStorage(STORAGE_KEYS.RECORDED_WORDS, {});
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+}
+
+function saveRecordedWordsStore(store) {
+    saveToStorage(STORAGE_KEYS.RECORDED_WORDS, store);
+}
+
+function getRecordedWordForIndex(textKey, index) {
+    if (!textKey || index < 0) return '';
+    const store = loadRecordedWordsStore();
+    const perText = store[textKey];
+    if (!perText || typeof perText !== 'object') return '';
+    const w = perText[String(index)];
+    return typeof w === 'string' ? w.trim() : '';
+}
+
+function setRecordedWordForCurrentSentence(w) {
+    const activeText = getAllTexts().find(t => t.id === activeTextId);
+    if (!activeText) return;
+    const textKey = getProgressKey(activeText);
+    const word = String(w || '').trim();
+    const store = loadRecordedWordsStore();
+    if (!store[textKey]) store[textKey] = {};
+    if (word) {
+        store[textKey][String(currentIndex)] = word;
+    } else {
+        delete store[textKey][String(currentIndex)];
+        if (Object.keys(store[textKey]).length === 0) delete store[textKey];
+    }
+    saveRecordedWordsStore(store);
+    updateRecordedWordDisplay();
 }
 
 function setRecordedWord(w) {
-    recordedWord = String(w || '').trim();
-    persistRecordedWord();
-    updateRecordedWordDisplay();
+    setRecordedWordForCurrentSentence(w);
 }
 
 function updateRecordedWordDisplay() {
     if (!recordedWordDisplay) return;
-    recordedWordDisplay.textContent = recordedWord;
-    recordedWordDisplay.classList.toggle('has-word', Boolean(recordedWord));
+    const activeText = getAllTexts().find(t => t.id === activeTextId);
+    let word = '';
+    if (
+        activeText &&
+        currentContent.length &&
+        currentIndex >= 0 &&
+        currentIndex < currentContent.length &&
+        !isFinished
+    ) {
+        word = getRecordedWordForIndex(getProgressKey(activeText), currentIndex);
+    }
+    recordedWordDisplay.textContent = word;
+    recordedWordDisplay.classList.toggle('has-word', Boolean(word));
 }
 
 function resizeUserInput() {
@@ -548,7 +586,6 @@ function initTrainer() {
     }
 
     currentContent = activeText.content;
-    recordedWord = loadFromStorage(STORAGE_KEYS.RECORDED_WORD, '') || '';
     const migrationResult = migrateProgressToTextNames(texts, loadFromStorage(STORAGE_KEYS.PROGRESS, {}));
     const savedProgress = migrationResult.progress;
     if (migrationResult.changed) {
