@@ -42,15 +42,28 @@
 
         .app-header {
             display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            margin-bottom: 15px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+            margin-bottom: 0;
+            padding: 12px 14px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
         }
 
         .header-actions {
-            display: flex;
-            align-items: center;
-            gap: 12px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        .header-actions .btn {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 0.9rem;
         }
         .mode-switch {
             display: flex;
@@ -129,11 +142,39 @@
         .current-task {
             margin-bottom: 14px;
         }
+        .current-task-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
         .position-badge {
             font-size: 0.85rem;
             font-weight: 600;
             color: var(--accent);
-            margin-bottom: 8px;
+            margin-bottom: 0;
+            flex: 1;
+            min-width: 0;
+        }
+        .recorded-word {
+            flex-shrink: 0;
+            max-width: 48%;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-align: right;
+            word-break: break-word;
+            line-height: 1.3;
+        }
+        .recorded-word:empty {
+            display: none;
+        }
+        .recorded-word.has-word {
+            padding: 3px 10px;
+            border-radius: 8px;
+            background: #fff8e1;
+            border: 1px solid #ffe082;
+            color: #5d4037;
         }
         .source-text {
             padding: 14px;
@@ -152,7 +193,8 @@
             animation: fadeIn 0.3s ease;
             line-height: 1.5;
         }
-        #enList .en-sentence {
+        #enList .en-sentence,
+        #vocabularyList .en-sentence {
             padding: 7px 10px;
             border-radius: 6px;
             border-left-width: 3px;
@@ -160,6 +202,15 @@
             font-size: 0.92rem;
             background: #ebe8e4;
             border-left-color: #a0968c;
+            animation: none;
+        }
+
+        #vocabularyList {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 14px;
+            margin-bottom: 4px;
         }
         .placeholder {
             color: var(--text-muted);
@@ -261,6 +312,35 @@
         }
         .feedback.error { background: var(--error-bg); color: var(--error-text); }
         .feedback.success { background: var(--success-bg); color: #155724; }
+        .pick-word-hint {
+            font-size: 0.85rem;
+            margin-top: 10px;
+            margin-bottom: 6px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+        .word-pick-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .word-pick {
+            margin: 0;
+            padding: 4px 10px;
+            border: 1px dashed var(--accent);
+            border-radius: 6px;
+            background: #fff;
+            cursor: pointer;
+            font: inherit;
+            font-size: 0.95rem;
+            color: var(--accent);
+        }
+        .word-pick:hover {
+            background: var(--active-bg);
+            border-style: solid;
+        }
         .hint { font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; text-align: center; }
 
         #enList {
@@ -353,23 +433,6 @@
                 box-sizing: border-box;
                 touch-action: manipulation;
             }
-            .app-header {
-                display: flex;
-                flex-direction: column;
-                align-items: stretch;
-                gap: 10px;
-                margin-bottom: 0;
-                padding: 12px 14px;
-                background: var(--panel);
-                border-bottom: 1px solid var(--border);
-                flex-shrink: 0;
-            }
-            .header-actions {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 8px;
-                width: 100%;
-            }
             .mode-switch {
                 grid-column: 1 / -1;
                 justify-content: space-between;
@@ -378,11 +441,6 @@
             .mode-switch select {
                 flex: 1;
                 min-width: 0;
-            }
-            .header-actions .btn {
-                width: 100%;
-                padding: 10px 12px;
-                font-size: 0.9rem;
             }
             .trainer-wrapper {
                 max-width: 100%;
@@ -421,8 +479,11 @@
             .input-zone .current-task {
                 margin-bottom: 8px;
             }
-            .input-zone .position-badge {
+            .input-zone .current-task-row {
                 margin-bottom: 4px;
+            }
+            .input-zone .position-badge {
+                margin-bottom: 0;
             }
             .input-zone .source-text {
                 padding: 10px 12px;
@@ -452,14 +513,13 @@
 </head>
 <body>
 
-<div class="app-header">
-    <div class="header-actions">
-        <button class="btn btn-secondary" id="openVocabulary">Словарный запас: 0</button>
-        <button class="btn btn-primary" id="openManager">Выбрать текст</button>
-    </div>
-</div>
-
 <div class="trainer-wrapper">
+    <div class="app-header">
+        <div class="header-actions">
+            <button class="btn btn-secondary" id="openVocabulary">Словарный запас: 0</button>
+            <button class="btn btn-primary" id="openManager">Выбрать текст</button>
+        </div>
+    </div>
     <div class="trainer-main">
         <div class="translation-panel">
             <div class="sentence-list" id="enList">
@@ -470,7 +530,10 @@
 
     <div class="input-zone">
         <div class="current-task" id="currentTask">
-            <div class="position-badge" id="positionBadge"></div>
+            <div class="current-task-row">
+                <div class="position-badge" id="positionBadge"></div>
+                <div class="recorded-word" id="recordedWordDisplay" aria-live="polite"></div>
+            </div>
             <div class="source-text" id="sourceText"></div>
         </div>
         <div class="composer-row">
@@ -536,7 +599,8 @@
         PROGRESS: 'trainer_progress',
         ACTIVE_ID: 'trainer_active_id',
         MODE: 'trainer_mode',
-        VOCABULARY: 'trainer_vocabulary'
+        VOCABULARY: 'trainer_vocabulary',
+        RECORDED_WORD: 'trainer_recorded_word'
     };
 
     let fileTexts = [];
@@ -930,11 +994,13 @@
     let isWaitingForGotIt = false;
     let isFinished = false;
     let trainingMode = loadFromStorage(STORAGE_KEYS.MODE, 'normal');
+    let recordedWord = '';
 
     const enList = document.getElementById('enList');
     const inputZone = document.querySelector('.input-zone');
     const currentTask = document.getElementById('currentTask');
     const positionBadge = document.getElementById('positionBadge');
+    const recordedWordDisplay = document.getElementById('recordedWordDisplay');
     const sourceText = document.getElementById('sourceText');
     const userInput = document.getElementById('userInput');
     const checkBtn = document.getElementById('checkBtn');
@@ -953,6 +1019,26 @@
         return str
             .toLowerCase()
             .replace(/[^\p{L}]+/gu, '');
+    }
+
+    function splitAnswerIntoWords(text) {
+        return String(text || '').trim().split(/\s+/).filter(Boolean);
+    }
+
+    function persistRecordedWord() {
+        saveToStorage(STORAGE_KEYS.RECORDED_WORD, recordedWord);
+    }
+
+    function setRecordedWord(w) {
+        recordedWord = String(w || '').trim();
+        persistRecordedWord();
+        updateRecordedWordDisplay();
+    }
+
+    function updateRecordedWordDisplay() {
+        if (!recordedWordDisplay) return;
+        recordedWordDisplay.textContent = recordedWord;
+        recordedWordDisplay.classList.toggle('has-word', Boolean(recordedWord));
     }
 
     function resizeUserInput() {
@@ -1061,6 +1147,7 @@
         }
 
         currentContent = activeText.content;
+        recordedWord = loadFromStorage(STORAGE_KEYS.RECORDED_WORD, '') || '';
         const migrationResult = migrateProgressToTextNames(texts, loadFromStorage(STORAGE_KEYS.PROGRESS, {}));
         const savedProgress = migrationResult.progress;
         if (migrationResult.changed) {
@@ -1104,6 +1191,7 @@
         currentTask.classList.remove('hidden');
         positionBadge.textContent = `${currentIndex + 1} из ${total}`;
         sourceText.textContent = currentContent[currentIndex].ru;
+        updateRecordedWordDisplay();
     }
 
     function renderEN() {
@@ -1158,7 +1246,14 @@
             checkBtn.classList.add('hidden');
             gotItBtn.classList.remove('hidden');
             feedback.className = 'feedback error';
-            feedback.innerHTML = `❌ Ошибка. Правильно:<br><strong>${currentContent[currentIndex].en}</strong>`;
+            const correctRaw = currentContent[currentIndex].en;
+            let correctTokens = splitAnswerIntoWords(correctRaw);
+            if (!correctTokens.length && String(correctRaw).trim()) {
+                correctTokens = [String(correctRaw).trim()];
+            }
+            const correctWordsHtml = correctTokens.map((w) => `<button type="button" class="word-pick">${escapeHtml(w)}</button>`).join('');
+            const correctBlock = `<div class="pick-word-hint">Правильный вариант:</div><div class="word-pick-row">${correctWordsHtml}</div>`;
+            feedback.innerHTML = `❌ Ошибка.<br>${correctBlock}`;
         }
     }
 
@@ -1206,6 +1301,12 @@
 
     checkBtn.addEventListener('click', checkAnswer);
     gotItBtn.addEventListener('click', handleGotIt);
+    feedback.addEventListener('click', (e) => {
+        const btn = e.target.closest('.word-pick');
+        if (!btn || !isWaitingForGotIt) return;
+        e.preventDefault();
+        setRecordedWord(btn.textContent);
+    });
     userInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
