@@ -6,6 +6,28 @@ const STORAGE_KEYS = {
     RECORDED_WORDS: 'trainer_recorded_words'
 };
 
+const THEME_STORAGE_KEY = 'trainer_theme';
+
+function applyTheme(theme) {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+        root.dataset.theme = 'dark';
+    } else {
+        delete root.dataset.theme;
+    }
+}
+
+function readStoredTheme() {
+    try {
+        const t = localStorage.getItem(THEME_STORAGE_KEY);
+        return t === 'dark' ? 'dark' : 'light';
+    } catch {
+        return 'light';
+    }
+}
+
+applyTheme(readStoredTheme());
+
 let fileTexts = [];
 
 function getAllTexts() {
@@ -406,7 +428,21 @@ const checkBtn = document.getElementById('checkBtn');
 const gotItBtn = document.getElementById('gotItBtn');
 const feedback = document.getElementById('feedback');
 const trainingModeEl = document.getElementById('trainingMode');
+const themeToggleEl = document.getElementById('themeToggle');
 const isMobile = window.matchMedia('(max-width: 768px)');
+
+if (themeToggleEl) {
+    themeToggleEl.checked = readStoredTheme() === 'dark';
+    themeToggleEl.setAttribute('aria-checked', themeToggleEl.checked ? 'true' : 'false');
+    themeToggleEl.addEventListener('change', () => {
+        const next = themeToggleEl.checked ? 'dark' : 'light';
+        try {
+            localStorage.setItem(THEME_STORAGE_KEY, next);
+        } catch (_) {}
+        applyTheme(next);
+        themeToggleEl.setAttribute('aria-checked', themeToggleEl.checked ? 'true' : 'false');
+    });
+}
 
 function resolveTrainingMode(mode) {
     if (mode === 'hard') return 'hard';
